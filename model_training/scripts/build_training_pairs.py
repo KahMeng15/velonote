@@ -7,9 +7,9 @@ import json
 import random
 from pathlib import Path
 
-RAW_DIR = Path("data/training/raw")
-POLISHED_DIR = Path("data/training/polished")
-OUTPUT_DIR = Path("data/training")
+RAW_DIR = Path("model_training/workspace/raw")
+POLISHED_DIR = Path("model_training/workspace/polished")
+OUTPUT_DIR = Path("model_training/workspace")
 
 SYSTEM_PROMPT = """You are a markdown formatter for university lecture notes.
 Given raw extracted markdown, output clean, consistently-styled markdown:

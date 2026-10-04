@@ -72,9 +72,9 @@ htmlcov/
 .cache/
 test/
 
-scripts/ProcessingAlgorithmTest/input/*
-scripts/ProcessingAlgorithmTest/output/*
-scripts/ProcessingAlgorithmTest/temp_input/*
+scripts/tests/ProcessingAlgorithmTest/input/*
+scripts/tests/ProcessingAlgorithmTest/output/*
+scripts/tests/ProcessingAlgorithmTest/temp_input/*
 
 docker-compose-test-env/*
 docker\ compose\ test\ env/
@@ -89,8 +89,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .aider*
-scripts/ExerciseGenerationTest/input/*
-scripts/ExerciseGenerationTest/output/*
+scripts/tests/ExerciseGenerationTest/input/*
+scripts/tests/ExerciseGenerationTest/output/*
 app/data/*
 config/app.config.json
 frontend_old/node_modules/@babel/code-frame/lib/index.js
@@ -1512,12 +1512,16 @@ frontend_old/node_modules/type-check/lib/check.js
 frontend_old/node_modules/type-check/lib/index.js
 frontend_old/node_modules/type-check/lib/parse-type.js
 docker-test-env/*
-scripts/resource_processing_test/input/*
-scripts/resource_processing_test/output/*
-scripts/resource_processing_test/temp_input/*
+scripts/tests/resource_processing_test/input/*
+scripts/tests/resource_processing_test/output/*
+scripts/tests/resource_processing_test/temp_input/*
 
-scripts/resource_processing_test/quality_reports/*
+scripts/tests/resource_processing_test/quality_reports/*
 models/ggml-tiny.bin
 models/*
 models/temp_input.wav
 .ruff_cache/*
+# Model Training Workspace
+model_training/workspace/*
+!model_training/workspace/.gitkeep
+model_training/workspace/**/.gitkeep

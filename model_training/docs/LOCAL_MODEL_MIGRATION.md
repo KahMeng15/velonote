@@ -132,11 +132,12 @@ python -m mlx_lm.convert \
 ```
 
 ### Step 3 — Collect training data
+First, drop the PDFs, PPTXs, or images you want to use for training into `model_training/workspace/input/`.
 
 ```bash
-# Extract raw markdown (AI polish disabled) from existing uploaded resources
-python scripts/collect_training_data.py
-# → writes to data/training/raw/*_raw.md
+# Extract raw markdown (AI polish disabled) from the files in the input folder
+python model_training/scripts/generate_raw_from_workspace.py
+# → writes to model_training/workspace/raw/*_raw.md
 ```
 
 Then **manually polish** each `*_raw.md` file:
@@ -145,15 +146,15 @@ Then **manually polish** each `*_raw.md` file:
 - Remove university/course metadata from title
 - Leave all content and exact words intact
 
-Save each polished version as `data/training/polished/*_polished.md`.
+Save each polished version as `model_training/workspace/polished/*_polished.md`.
 
 **Target: 150–200 polished examples** (50 is enough to start a test run).
 
 ### Step 4 — Build JSONL training pairs
 
 ```bash
-python scripts/build_training_pairs.py
-# → writes data/training/train.jsonl and data/training/val.jsonl
+python model_training/scripts/build_training_pairs.py
+# → writes model_training/workspace/train.jsonl and model_training/workspace/val.jsonl
 ```
 
 ### Step 5 — Train
@@ -165,16 +166,16 @@ source ~/mlx-finetune-env/bin/activate
 python -m mlx_lm.lora \
   --model models/llm/qwen3.5-1.7b-4bit \
   --train \
-  --data data/training \
-  --config config/lora_1.7b.yaml \
+  --data model_training/workspace \
+  --config model_training/config/lora_1.7b.yaml \
   --iters 10
 
 # Full training run (~20 min on M3 Pro)
 python -m mlx_lm.lora \
   --model models/llm/qwen3.5-1.7b-4bit \
   --train \
-  --data data/training \
-  --config config/lora_1.7b.yaml
+  --data model_training/workspace \
+  --config model_training/config/lora_1.7b.yaml
 ```
 
 Expected output:
@@ -254,8 +255,8 @@ snapshot_download(
 python -m mlx_lm.lora \
   --model models/llm/qwen3.5-4b-4bit \
   --train \
-  --data data/training \
-  --config config/lora_4b.yaml
+  --data model_training/workspace \
+  --config model_training/config/lora_4b.yaml
 ```
 
 All other steps (fuse → GGUF → Ollama create) are identical.
@@ -267,14 +268,15 @@ All other steps (fuse → GGUF → Ollama create) are identical.
 | File | Purpose |
 |------|---------|
 | `models/llm/Modelfile` | Ollama Modelfile for base (untuned) model |
-| `config/lora_1.7b.yaml` | MLX LoRA training config for 1.7b |
-| `config/lora_4b.yaml` | MLX LoRA training config for 4b (upgrade path) |
-| `scripts/collect_training_data.py` | Extracts raw markdown from existing resources |
-| `scripts/build_training_pairs.py` | Builds `train.jsonl` / `val.jsonl` from raw+polished pairs |
-| `data/training/raw/` | Raw (pre-polish) markdown files |
-| `data/training/polished/` | Manually curated target markdown files |
-| `data/training/train.jsonl` | Training dataset (auto-generated) |
-| `data/training/val.jsonl` | Validation dataset (auto-generated) |
+| `model_training/config/lora_1.7b.yaml` | MLX LoRA training config for 1.7b |
+| `model_training/config/lora_4b.yaml` | MLX LoRA training config for 4b (upgrade path) |
+| `model_training/scripts/generate_raw_from_workspace.py` | Extracts raw markdown from existing resources |
+| `model_training/scripts/build_training_pairs.py` | Builds `train.jsonl` / `val.jsonl` from raw+polished pairs |
+| `model_training/workspace/input/` | Drop PDFs/PPTXs here to generate raw markdown |
+| `model_training/workspace/raw/` | Raw (pre-polish) markdown files |
+| `model_training/workspace/polished/` | Manually curated target markdown files |
+| `model_training/workspace/train.jsonl` | Training dataset (auto-generated) |
+| `model_training/workspace/val.jsonl` | Validation dataset (auto-generated) |
 | `models/llm/velonote-1.7b-adapter/` | LoRA adapter weights (dev machine only) |
 | `models/llm/velonote-formatter.q4_k_m.gguf` | Final GGUF for deployment |
 
@@ -289,9 +291,9 @@ All other steps (fuse → GGUF → Ollama create) are identical.
 - [ ] Restart worker, test a document upload
 
 ### This week (data collection)
-- [ ] `python scripts/collect_training_data.py`
-- [ ] Manually polish first 50 examples → `data/training/polished/`
-- [ ] `python scripts/build_training_pairs.py`
+- [ ] `python model_training/scripts/generate_raw_from_workspace.py`
+- [ ] Manually polish first 50 examples → `model_training/workspace/polished/`
+- [ ] `python model_training/scripts/build_training_pairs.py`
 - [ ] Set up `~/mlx-finetune-env` on dev machine
 
 ### Next week (training)
