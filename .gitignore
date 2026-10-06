@@ -1525,3 +1525,20 @@ models/temp_input.wav
 model_training/workspace/*
 !model_training/workspace/.gitkeep
 model_training/workspace/**/.gitkeep
+
+# Ad-hoc scripts
+fix_dataset.py
+run_training.sh
+
+# Model Training ad-hoc
+model_training/config/lora_2b.yaml
+model_training/scripts/auto_polish_standalone.py
+model_training/scripts/auto_polish_workspace.py
+
+# Test Data and Outputs
+scripts/ProcessingAlgorithmTest/output/
+scripts/ProcessingAlgorithmTest/input/
+scripts/ProcessingAlgorithmTest/temp_input/
+scripts/tests/resource_processing_test/output/
+scripts/tests/resource_processing_test/input/
+scripts/tests/resource_processing_test/temp_input/

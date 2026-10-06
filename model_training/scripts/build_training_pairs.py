@@ -60,7 +60,7 @@ def build():
     (OUTPUT_DIR / "train.jsonl").write_text(
         "\n".join(json.dumps(e) for e in train)
     )
-    (OUTPUT_DIR / "val.jsonl").write_text(
+    (OUTPUT_DIR / "valid.jsonl").write_text(
         "\n".join(json.dumps(e) for e in val)
     )
 

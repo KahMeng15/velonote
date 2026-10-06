@@ -1,6 +1,6 @@
 # Local Formatter Model — Migration & Startup Guide
 
-> **Goal:** Replace the cloud AI polish pass (Groq/Gemini) in the resource processing pipeline with a fine-tuned local model (`qwen2.5:1.5b`) served via Ollama on the production server. Zero cloud dependency for document processing.
+> **Goal:** Replace the cloud AI polish pass (Groq/Gemini) in the resource processing pipeline with a fine-tuned local model (`gemma2:2b`) served via Ollama on the production server. Zero cloud dependency for document processing.
 
 ## Why This Exists
 
@@ -10,7 +10,7 @@ The current pipeline calls a cloud AI (Groq `llama-3.3-70b-versatile`) to clean 
 - **Rate limits:** forced to `max_workers=1` to avoid Groq free-tier TPM limits
 - **Cost & dependency:** every document upload hits an external API
 
-A fine-tuned `qwen2.5:1.5b` (1.1 GB, ~1.5 GB RAM at runtime) on the production server eliminates all of these.
+A fine-tuned `gemma2:2b` (1.1 GB, ~1.5 GB RAM at runtime) on the production server eliminates all of these.
 
 ---
 
@@ -42,7 +42,7 @@ Document Upload
 
 | Requirement | Value |
 |-------------|-------|
-| Model | qwen2.5:1.5b (fine-tuned, 4-bit GGUF) |
+| Model | gemma2:2b (fine-tuned, 4-bit GGUF) |
 | Disk space | ~1.1 GB |
 | RAM at runtime | ~1.5–2 GB |
 | GPU | Not required (CPU inference) |
@@ -69,8 +69,8 @@ Get local, rate-limit-free processing running **today** using the base (untuned)
 ### On the production server
 
 ```bash
-# 1. Pull the 1.5b model (~1.1 GB)
-ollama pull qwen2.5:1.5b
+# 1. Pull the 2b model (~1.1 GB)
+ollama pull gemma2:2b
 
 # 2. Create the formatter model with style rules baked in
 ollama create velonote-formatter -f models/llm/Modelfile
@@ -106,30 +106,12 @@ uv pip install "mlx-lm>=0.31" "numpy<2" huggingface_hub
 python -m mlx_lm.lora --help | head -3
 ```
 
-### Step 2 — Download the base model
+### Step 2 — Verify Model Configuration
 
-```bash
-source ~/mlx-finetune-env/bin/activate
+You no longer need to manually download the model! 
+Apple MLX will automatically pull the highly-optimized `mlx-community/gemma-2-2b-it-4bit` model from HuggingFace and cache it for you during training.
 
-python -c "
-from huggingface_hub import snapshot_download
-snapshot_download(
-    repo_id='mlx-community/Qwen2.5-1.5B-Instruct-4bit',
-    local_dir='models/llm/qwen2.5-1.5b-4bit',
-    ignore_patterns=['*.pt', '*.bin']
-)
-print('Done.')
-"
-```
-
-If the 4-bit version is not yet on HuggingFace:
-
-```bash
-python -m mlx_lm.convert \
-  --hf-path Qwen/Qwen2.5-1.5B-Instruct \
-  --mlx-path models/llm/qwen2.5-1.5b-4bit \
-  --quantize --q-bits 4
-```
+Just ensure your `lora_2b.yaml` has the correct `model` property.
 
 ### Step 3 — Collect training data
 First, drop the PDFs, PPTXs, or images you want to use for training into `model_training/workspace/input/`.
@@ -163,19 +145,11 @@ python model_training/scripts/build_training_pairs.py
 source ~/mlx-finetune-env/bin/activate
 
 # Dry run (10 iters, ~1 min) — check RAM stays < 16 GB
-python -m mlx_lm.lora \
-  --model models/llm/qwen2.5-1.5b-4bit \
-  --train \
-  --data model_training/workspace \
-  --config model_training/config/lora_1.5b.yaml \
-  --iters 10
+python -m mlx_lm lora --config model_training/config/lora_2b.yaml --iters 10
 
 # Full training run (~20 min on M3 Pro)
-python -m mlx_lm.lora \
-  --model models/llm/qwen2.5-1.5b-4bit \
-  --train \
-  --data model_training/workspace \
-  --config model_training/config/lora_1.5b.yaml
+# (All settings like the model name and data path are managed inside the yaml file)
+python -m mlx_lm lora --config model_training/config/lora_2b.yaml
 ```
 
 Expected output:
@@ -193,8 +167,8 @@ Stop early (Ctrl+C) when val loss plateaus or drops below 0.5.
 source ~/mlx-finetune-env/bin/activate
 
 python -m mlx_lm.generate \
-  --model models/llm/qwen2.5-1.5b-4bit \
-  --adapter-path models/llm/velonote-1.5b-adapter \
+  --model models/llm/gemma-2-2b-it \
+  --adapter-path models/llm/velonote-2b-adapter \
   --prompt "$(cat path/to/test_raw.md)" \
   --max-tokens 4096 \
   --temp 0.0
@@ -210,8 +184,8 @@ If quality is insufficient → see **Upgrade to 3b** below.
 source ~/mlx-finetune-env/bin/activate
 
 python -m mlx_lm.fuse \
-  --model models/llm/qwen2.5-1.5b-4bit \
-  --adapter-path models/llm/velonote-1.5b-adapter \
+  --model models/llm/gemma-2-2b-it \
+  --adapter-path models/llm/velonote-2b-adapter \
   --save-path models/llm/velonote-formatter-fused
 
 # Convert to GGUF for Ollama
@@ -239,7 +213,7 @@ ollama create velonote-formatter -f ~/models/Modelfile
 
 ## Upgrade Path: qwen2.5:3b
 
-If 1.5b quality is not good enough after evaluation:
+If 2b quality is not good enough after evaluation:
 
 ```bash
 # Download 3b base (~2.5 GB, uses ~3–4 GB RAM on server)
@@ -268,7 +242,7 @@ All other steps (fuse → GGUF → Ollama create) are identical.
 | File | Purpose |
 |------|---------|
 | `models/llm/Modelfile` | Ollama Modelfile for base (untuned) model |
-| `model_training/config/lora_1.5b.yaml` | MLX LoRA training config for 1.5b |
+| `model_training/config/lora_2b.yaml` | MLX LoRA training config for 2b |
 | `model_training/config/lora_3b.yaml` | MLX LoRA training config for 3b (upgrade path) |
 | `model_training/scripts/generate_raw_from_workspace.py` | Extracts raw markdown from existing resources |
 | `model_training/scripts/build_training_pairs.py` | Builds `train.jsonl` / `val.jsonl` from raw+polished pairs |
@@ -277,7 +251,7 @@ All other steps (fuse → GGUF → Ollama create) are identical.
 | `model_training/workspace/polished/` | Manually curated target markdown files |
 | `model_training/workspace/train.jsonl` | Training dataset (auto-generated) |
 | `model_training/workspace/val.jsonl` | Validation dataset (auto-generated) |
-| `models/llm/velonote-1.5b-adapter/` | LoRA adapter weights (dev machine only) |
+| `models/llm/velonote-2b-adapter/` | LoRA adapter weights (dev machine only) |
 | `models/llm/velonote-formatter.q4_k_m.gguf` | Final GGUF for deployment |
 
 ---
@@ -285,7 +259,7 @@ All other steps (fuse → GGUF → Ollama create) are identical.
 ## Checklist
 
 ### Immediate (today)
-- [ ] `ollama pull qwen2.5:1.5b` on server
+- [ ] `ollama pull gemma2:2b` on server
 - [ ] `ollama create velonote-formatter -f models/llm/Modelfile` on server
 - [ ] Update `.env` → `GLOBAL_AI_TIER2_*` to point at local Ollama
 - [ ] Restart worker, test a document upload
@@ -298,7 +272,7 @@ All other steps (fuse → GGUF → Ollama create) are identical.
 
 ### Next week (training)
 - [ ] Polish remaining 100+ examples (150 total)
-- [ ] Download `mlx-community/Qwen2.5-1.5B-Instruct-4bit`
+- [ ] Download `google/gemma-2-2b-it`
 - [ ] Run 600-iter training (~20 min)
 - [ ] Evaluate on 5 unseen documents
 
