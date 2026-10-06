@@ -74,6 +74,8 @@ services:
       dockerfile: Dockerfile
     container_name: velonote_api_dev
     command: python3 -m uvicorn app.main:app --host 0.0.0.0 --port ${API_PORT:-8000} --reload --reload-dir app
+    ports:
+      - "${API_PORT:-8000}:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -85,8 +87,11 @@ services:
     environment:
       - DB_HOST=db
       - REDIS_URL=redis://redis:6379/0
+      - CORS_ALLOWED_ORIGINS=http://localhost:8000,http://127.0.0.1:8000,http://localhost:5173,http://127.0.0.1:5173
     volumes:
       - .:/app  # Mount entire workspace for live-reload
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
     networks:
       - velonote-net-dev
@@ -117,18 +122,22 @@ services:
     networks:
       - velonote-net-dev
 
-  nginx:
-    image: ghcr.io/kahmeng15/velonote:nginx-dev
-    build:
-      context: .
-      dockerfile: app/Dockerfile.nginx
+  frontend:
+    image: node:20-alpine
     container_name: velonote_frontend_dev
+    working_dir: /app
+    command: sh -c "npm install && npm run dev"
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://api:8000
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
     depends_on:
       - api
-    ports:
-      - "${PUBLIC_PORT:-8000}:80"
-    volumes:
-      - ./logs:/app/logs
     restart: unless-stopped
     networks:
       - velonote-net-dev
@@ -177,6 +186,7 @@ services:
 volumes:
   pgdata:
   ollama_models:
+  frontend_node_modules:
 
 networks:
   velonote-net-dev:

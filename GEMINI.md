@@ -29,8 +29,10 @@ pip install -r requirements.txt
 cp .env.example .env
 # Edit .env to add your API keys. Do NOT set DATABASE_URL — it's auto-constructed from DB_USER/PASSWORD/HOST/PORT/NAME.
 
-# 4. Run API and Worker
-./scripts/dev.sh
+# 4. Run API, Worker, and Frontend (Local or Containerized)
+./scripts/dev.sh              # Local (Python + Node on host)
+# OR Run full containerized dev stack with file watchers:
+docker compose -f docker-compose.dev.yml up
 ```
 
 ### Docker Deployment

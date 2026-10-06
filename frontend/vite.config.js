@@ -11,6 +11,11 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     logLevel: 'warn',
     server: {
+      host: true,
+      port: 5173,
+      watch: {
+        usePolling: true,
+      },
       hmr: { log: false },
       proxy: {
         '/api': {

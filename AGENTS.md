@@ -17,11 +17,13 @@
 ```bash
 brew install tesseract poppler                              # System deps (macOS)
 pip install -r requirements.txt
-./scripts/dev.sh                                             # API + Worker + Frontend (parallel)
+./scripts/dev.sh                                             # API + Worker + Frontend (parallel, local)
+./scripts/dev.sh --docker                                    # Or: docker compose -f docker-compose.dev.yml up (dev containers with file watchers)
+docker compose -f docker-compose.dev.yml --profile builtin up # Dev containers with local Ollama
 python -m uvicorn app.main:app --reload                      # API only
 python -m app.worker_main                                    # Worker only
 cd frontend && npm run dev                                   # Frontend only
-docker compose up -d --build                                 # Full stack
+docker compose up -d --build                                 # Full prod stack
 docker compose -f docker-compose.dev.yml up -d db redis      # Infra only for local dev
 cd frontend && npm run lint                                  # Frontend lint
 python scripts/resource_processing_test/process_all.py        # One-command: drop file in input/, run this

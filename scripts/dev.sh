@@ -1,7 +1,13 @@
 #!/bin/bash
 
 # velonote Local Development Script
-# This starts the API, the Worker, and the React Frontend in parallel.
+# Run locally bare-metal or pass --docker to launch full containerized stack.
+
+if [ "$1" = "--docker" ] || [ "$1" = "-d" ]; then
+    shift
+    echo "Starting velonote dev containers with file watchers..."
+    exec docker compose -f docker-compose.dev.yml up "$@"
+fi
 
 # 1. Ensure logs directory exists
 mkdir -p logs
