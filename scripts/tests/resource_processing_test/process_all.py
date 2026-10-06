@@ -25,7 +25,7 @@ import sys
 import time
 from pathlib import Path
 
-_PROJECT_ROOT = Path(__file__).parent.parent.parent
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(_PROJECT_ROOT))
 
 from dotenv import load_dotenv
@@ -97,7 +97,7 @@ def process_and_report(file_path: Path, polish: bool = False) -> dict:
         for w in bundle.warnings:
             print(f"  ⚠  {w}")
 
-    from scripts.resource_processing_test.test_harness.metrics import QualityMetrics
+    from scripts.tests.resource_processing_test.test_harness.metrics import QualityMetrics
     metrics = QualityMetrics().compute(
         markdown=bundle.markdown,
         format_type=fmt,
@@ -124,11 +124,11 @@ def process_and_report(file_path: Path, polish: bool = False) -> dict:
     except Exception:
         pass
 
-    from scripts.resource_processing_test.test_harness.reporter import Reporter
+    from scripts.tests.resource_processing_test.test_harness.reporter import Reporter
     expected_dir = Path(__file__).parent / "expected"
     expected_file = expected_dir / f"{file_path.stem}.md"
     if expected_file.exists():
-        from scripts.resource_processing_test.test_harness.diff_engine import DiffEngine
+        from scripts.tests.resource_processing_test.test_harness.diff_engine import DiffEngine
         expected = expected_file.read_text(encoding="utf-8")
         diff = DiffEngine().compare(bundle.markdown, expected)
         print(f"  Expected comparison: similarity {diff.similarity_ratio:.2%}")
@@ -183,7 +183,7 @@ def print_final_summary(results: list[dict]):
     print(f"  Files: {len(results)}, Warnings: {total_warnings}")
     print(f"{'=' * 60}")
 
-    from scripts.resource_processing_test.test_harness.reporter import Reporter
+    from scripts.tests.resource_processing_test.test_harness.reporter import Reporter
     quality_dir = Path(__file__).parent / "quality_reports"
     historical = Reporter().load_historical_reports(str(quality_dir))
     if len(historical) >= 2:
@@ -198,7 +198,7 @@ def run_self_improvement():
         print(f"\n{'=' * 60}")
         print(f"  SELF-IMPROVEMENT ANALYSIS")
         print(f"{'=' * 60}")
-        from scripts.resource_processing_test.analyze_corrections import analyze, suggest_tweaks, persist_to_knowledge
+        from scripts.tests.resource_processing_test.analyze_corrections import analyze, suggest_tweaks, persist_to_knowledge
         analysis = analyze(str(corrections_dir))
         if analysis:
             persist_to_knowledge(analysis, str(corrections_dir))

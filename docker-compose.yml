@@ -90,6 +90,8 @@ services:
       - ./data:/app/data
       - ./logs:/app/logs
       - ./config:/app/config
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
     networks:
       - velonote-net
@@ -115,6 +117,8 @@ services:
       - ./data:/app/data
       - ./logs:/app/logs
       - ./config:/app/config
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
     networks:
       - velonote-net
@@ -132,8 +136,50 @@ services:
     networks:
       - velonote-net
 
+  # ===========================================================================
+  # Ollama Local Model Service (Builtin Mode)
+  # Activated only when COMPOSE_PROFILES=builtin or --profile builtin is used.
+  # If running in standalone mode (external Ollama), this service is not started.
+  # ===========================================================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: velonote_ollama
+    profiles:
+      - builtin
+      - ollama
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    environment:
+      - OLLAMA_KEEP_ALIVE=24h
+      - OLLAMA_NUM_PARALLEL=1
+      - OLLAMA_MAX_LOADED_MODELS=1
+    restart: unless-stopped
+    networks:
+      - velonote-net
+
+  ollama-init:
+    image: curlimages/curl:latest
+    container_name: velonote_ollama_init
+    profiles:
+      - builtin
+      - ollama
+    depends_on:
+      - ollama
+    entrypoint: ["/bin/sh", "/scripts/init_ollama.sh"]
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:1.5b}
+    volumes:
+      - ./scripts/init_ollama.sh:/scripts/init_ollama.sh:ro
+    networks:
+      - velonote-net
+    restart: "no"
+
 volumes:
   pgdata:
+  ollama_models:
 
 networks:
   velonote-net:

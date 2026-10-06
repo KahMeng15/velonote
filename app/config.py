@@ -205,6 +205,7 @@ class Settings(BaseSettings):
     GLOBAL_AI_TIER1_MODEL: str = "llama-3.1-8b-instant"
     GLOBAL_AI_TIER1_API_KEY: str = ""
     GLOBAL_AI_TIER1_REASONING_LEVEL: str = ""
+    GLOBAL_AI_TIER1_BASE_URL: str = ""
 
     GLOBAL_AI_TIER2_PROVIDER: str = "groq"
     GLOBAL_AI_TIER2_MODEL: str = "llama-3.3-70b-versatile"

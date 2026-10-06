@@ -16,15 +16,15 @@ import sys
 import time
 from pathlib import Path
 
-_PROJECT_ROOT = Path(__file__).parent.parent.parent
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(_PROJECT_ROOT))
 
 from dotenv import load_dotenv
 load_dotenv(dotenv_path=_PROJECT_ROOT / ".env")
 
-from scripts.resource_processing_test.test_harness.diff_engine import DiffEngine
-from scripts.resource_processing_test.test_harness.metrics import QualityMetrics
-from scripts.resource_processing_test.test_harness.reporter import Reporter
+from scripts.tests.resource_processing_test.test_harness.diff_engine import DiffEngine
+from scripts.tests.resource_processing_test.test_harness.metrics import QualityMetrics
+from scripts.tests.resource_processing_test.test_harness.reporter import Reporter
 
 logger = logging.getLogger(__name__)
 
@@ -250,7 +250,7 @@ def main():
         corrections_dir = base_dir / "corrections"
         if corrections_dir.exists():
             try:
-                from scripts.resource_processing_test.analyze_corrections import analyze
+                from scripts.tests.resource_processing_test.analyze_corrections import analyze
                 analyze(str(corrections_dir))
             except ImportError:
                 print("Correction analyzer not available. Run correction_tool.py first to create corrections.")

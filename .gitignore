@@ -1542,3 +1542,4 @@ scripts/ProcessingAlgorithmTest/temp_input/
 scripts/tests/resource_processing_test/output/
 scripts/tests/resource_processing_test/input/
 scripts/tests/resource_processing_test/temp_input/
+scripts/tests/resource_processing_test/expected/

@@ -54,19 +54,21 @@ class AIClient:
                 model_name=settings.GLOBAL_AI_TIER1_MODEL,
                 api_key=settings.GLOBAL_AI_TIER1_API_KEY,
                 reasoning_level=settings.GLOBAL_AI_TIER1_REASONING_LEVEL,
+                base_url=settings.GLOBAL_AI_TIER1_BASE_URL or settings.OLLAMA_BASE_URL,
             ),
             AITier(
                 provider=settings.GLOBAL_AI_TIER2_PROVIDER,
                 model_name=settings.GLOBAL_AI_TIER2_MODEL,
                 api_key=settings.GLOBAL_AI_TIER2_API_KEY,
                 reasoning_level=settings.GLOBAL_AI_TIER2_REASONING_LEVEL,
+                base_url=settings.GLOBAL_AI_TIER2_BASE_URL or settings.OLLAMA_BASE_URL,
             ),
             AITier(
                 provider=settings.GLOBAL_AI_TIER3_PROVIDER,
                 model_name=settings.GLOBAL_AI_TIER3_MODEL,
                 api_key=settings.GLOBAL_AI_TIER3_API_KEY,
                 reasoning_level=settings.GLOBAL_AI_TIER3_REASONING_LEVEL,
-                base_url=settings.GLOBAL_AI_TIER3_BASE_URL,
+                base_url=settings.GLOBAL_AI_TIER3_BASE_URL or settings.OLLAMA_BASE_URL,
             ),
         ]
 
@@ -208,12 +210,13 @@ class AIClient:
 
         url = f"{tier.base_url.rstrip('/')}/api/generate"
         logger.info(f"OLLAMA: Calling {url} with model {tier.model_name}")
+        temp = 0.2 if tier.reasoning_level == "low" else 0.7
         payload = {
             "model": tier.model_name,
             "prompt": prompt,
             "system": system_instruction,
             "stream": False,
-            "options": {"temperature": 0.7},
+            "options": {"temperature": temp},
         }
 
         try:

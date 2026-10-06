@@ -43,9 +43,14 @@ class SmartPipeline:
         use_vision: bool = False,
         inter_call_delay_s: float = 0.0,
     ):
-        self.use_polish = use_polish and (
-            bool(gemini_api_key) or bool(settings.GLOBAL_AI_TIER1_API_KEY)
+        has_ai = (
+            bool(gemini_api_key)
+            or bool(settings.GLOBAL_AI_TIER1_API_KEY)
+            or bool(settings.GLOBAL_AI_TIER2_API_KEY)
+            or settings.GLOBAL_AI_TIER1_PROVIDER == "ollama"
+            or settings.GLOBAL_AI_TIER2_PROVIDER == "ollama"
         )
+        self.use_polish = use_polish and has_ai
         self.gemini_api_key = gemini_api_key
         self.gemini_model = gemini_model or settings.GLOBAL_AI_TIER1_MODEL
         self.font_extractor = FontAwareExtractor()
@@ -174,6 +179,29 @@ class SmartPipeline:
     def _process_pdf(self, pdf_path: str) -> str:
         """Process a PDF file through the pipeline."""
         logger.info(f"Processing PDF: {pdf_path}")
+
+        # Primary Option A: High-fidelity layout extraction via pymupdf4llm
+        try:
+            import pymupdf4llm
+            from app.processing.slide_normalizer import clean_slide_markdown
+
+            logger.info("Extracting PDF via pymupdf4llm...")
+            raw_md = pymupdf4llm.to_markdown(pdf_path)
+            if raw_md and len(raw_md.strip()) > 50:
+                markdown = clean_slide_markdown(raw_md)
+
+                # Inject H1 title from PDF metadata or filename if missing
+                has_valid_h1 = any(l.startswith("# ") for l in markdown.split("\n"))
+                if not has_valid_h1:
+                    title = self._extract_pdf_title(pdf_path)
+                    if title:
+                        markdown = f"# {title}\n\n{markdown}"
+                        logger.info(f"  Injected H1 title: '{title}'")
+                return markdown
+        except Exception as e:
+            logger.warning(
+                f"pymupdf4llm extraction failed, falling back to legacy font-aware extractor: {e}"
+            )
 
         # Extract tables first (for position tracking)
         logger.info("Extracting tables...")
@@ -654,7 +682,8 @@ class SmartPipeline:
             i += 1
 
         result = "\n".join(cleaned_lines)
-        result = re.sub(r"\n{3,}", "\n\n", result).strip() + "\n"
+        from app.processing.slide_normalizer import clean_slide_markdown
+        result = clean_slide_markdown(result)
         return result
 
     def _fix_punctuation_spacing(self, text: str) -> str:
@@ -1472,7 +1501,7 @@ class SmartPipeline:
             from concurrent.futures import ThreadPoolExecutor, as_completed
 
             # Ensure debug directory exists for streaming chunks
-            chunk_debug_dir = Path("scripts/ProcessingAlgorithmTest/output/debug_chunks")
+            chunk_debug_dir = Path("logs/debug_chunks")
             chunk_debug_dir.mkdir(parents=True, exist_ok=True)
 
             import contextvars
@@ -1616,7 +1645,7 @@ CRITICAL RULES:
 3. KEEP ALL CONTENT & EXACT WORDS: Do NOT delete, omit, or skip any learning objectives, slides, headings, bullet points, or paragraphs from the input. Use the exact words from the source text. Never rephrase or summarize.
 {heading_rule}
 6. FIX LOGICAL LISTS: If a heading in the input is logically a list item (e.g. it follows a colon or an introductory list sentence like "you will be able to:"), format it as a list item (- ) instead of a heading.
-7. CODE BLOCKS: Use ```java only for actual code. If it's normal text, remove the code block.
+7. CODE BLOCKS: Use appropriate code blocks (```) only for actual programming code. If it's normal text, remove the code block.
 8. YOUR ENTIRE RESPONSE MUST BE WRAPPED EXACTLY IN ===START=== AND ===END=== MARKERS.
 
 {title_instruction}
