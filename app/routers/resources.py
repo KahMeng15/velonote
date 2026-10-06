@@ -72,6 +72,7 @@ async def upload_resource(
     subject_id: str = Form(...),
     files: list[UploadFile] = File(...),
     title: str = Form(None),
+    use_ai_polish: bool = Form(False),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -166,6 +167,7 @@ async def upload_resource(
             resource_id=db_note.id,
             file_name=file.filename,
             auto_detect_title=auto_detect_title,
+            use_ai_polish=use_ai_polish,
         )
         processed_notes.append(db_note)
 
@@ -268,6 +270,7 @@ async def update_resource(
 def reprocess_ocr(
     resource_id: str,
     use_v2: bool = True,
+    use_ai_polish: bool = False,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -283,7 +286,7 @@ def reprocess_ocr(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found")
 
     try:
-        logger.info(f"Reprocessing OCR for note {resource_id} (use_v2={use_v2})")
+        logger.info(f"Reprocessing OCR for note {resource_id} (use_v2={use_v2}, use_ai_polish={use_ai_polish})")
 
         # Pre-task cleanup
         clear_cache_pattern_sync(f"cache_resp:/resources*:u{current_user.id}*")
@@ -307,6 +310,7 @@ def reprocess_ocr(
             resource_id=note.id,
             file_name=note.title,
             auto_detect_title=False,
+            use_ai_polish=use_ai_polish,
         )
 
         logger.info(f"Successfully submitted task for reprocessing OCR for note {resource_id}")
@@ -330,6 +334,7 @@ def reprocess_ocr(
 def reprocess_resource_from_scratch(
     resource_id: str,
     use_v2: bool = True,
+    use_ai_polish: bool = False,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -344,7 +349,7 @@ def reprocess_resource_from_scratch(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found")
 
     try:
-        logger.info(f"Starting full resource rebuild for {resource_id}")
+        logger.info(f"Starting full resource rebuild for {resource_id} (use_ai_polish={use_ai_polish})")
 
         # Pre-task cleanup
         clear_cache_pattern_sync(f"cache_resp:/resources*:u{current_user.id}*")
@@ -369,6 +374,7 @@ def reprocess_resource_from_scratch(
             resource_id=note.id,
             file_name=note.title,
             auto_detect_title=True,
+            use_ai_polish=use_ai_polish,
         )
 
         logger.info(f"Successfully submitted task for rebuilding note {resource_id} from scratch")

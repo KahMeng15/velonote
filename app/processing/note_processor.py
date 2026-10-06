@@ -57,8 +57,12 @@ def get_pipeline_for_user(user: User) -> SmartPipeline:
     )
 
 
-def get_unified_processor_for_user(user: User) -> UnifiedContentProcessor:
-    """Get a UnifiedContentProcessor with the appropriate settings for this user."""
+def get_unified_processor_for_user(
+    user: User, use_polish: bool = False
+) -> UnifiedContentProcessor:
+    """Get a UnifiedContentProcessor with the appropriate settings for this user.
+    Defaults to use_polish=False for fast, layout-preserved, zero-RAM extraction.
+    """
     from app.config import get_settings
 
     app_settings = get_settings()
@@ -76,9 +80,8 @@ def get_unified_processor_for_user(user: User) -> UnifiedContentProcessor:
         if getattr(user, "ai_model", None):
             gemini_model = user.ai_model
 
-    has_any_ai_key = bool(tier1_api_key) or bool(gemini_key)
     return UnifiedContentProcessor(
-        use_polish=has_any_ai_key,
+        use_polish=use_polish,
         gemini_api_key=gemini_key,
         gemini_model=gemini_model,
     )
@@ -179,11 +182,17 @@ def markdown_to_segments(markdown: str) -> list:
 
 
 def process_resource_task(
-    resource_id: str, user_id: int, auto_detect_title: bool = False, **kwargs
+    resource_id: str,
+    user_id: int,
+    auto_detect_title: bool = False,
+    use_ai_polish: bool = False,
+    **kwargs,
 ):
     """Core logic to process a resource, used by both worker and (optionally) API."""
     task_id = kwargs.get("task_id") or f"ocr_{user_id}_{resource_id}"
     started_at = datetime.now(timezone.utc).isoformat()
+    # Support both use_ai_polish and use_polish keyword arguments
+    effective_polish = bool(kwargs.get("use_polish", use_ai_polish))
 
     db = SessionLocal()
     try:
@@ -216,6 +225,7 @@ def process_resource_task(
         _log(f"[{resource_id}]   file_type     : {resource.file_type}  ext: {file_ext}")
         _log(f"[{resource_id}]   file_size     : {file_size_bytes:,} bytes ({file_size_bytes / 1024:.1f} KB)")
         _log(f"[{resource_id}]   auto_detect   : {auto_detect_title}")
+        _log(f"[{resource_id}]   use_ai_polish : {effective_polish}")
         _log(
             f"[{resource_id}] ══════════════════════════════════════════════════════"
         )
@@ -265,7 +275,7 @@ def process_resource_task(
         # ── Extraction ─────────────────────────────────────────────────────────
         _log(f"[{resource_id}] Starting UnifiedContentProcessor.extract()")
         try:
-            processor = get_unified_processor_for_user(user)
+            processor = get_unified_processor_for_user(user, use_polish=effective_polish)
             _log(f"[{resource_id}]   use_polish    : {processor.use_polish}")
             _log(f"[{resource_id}]   gemini_model  : {processor.gemini_model or 'none'}")
             bundle = processor.extract(

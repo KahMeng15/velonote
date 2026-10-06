@@ -509,6 +509,7 @@ export default function SubjectView() {
   const [deleteNoteModalOpened, { open: openDeleteNoteModal, close: closeDeleteNoteModal }] = useDisclosure(false);
   const [reprocessNoteModalOpened, { open: openReprocessNoteModal, close: closeReprocessNoteModal }] = useDisclosure(false);
   const [reprocessingNote, setReprocessingNote] = useState(null);
+  const [reprocessUseAiPolish, setReprocessUseAiPolish] = useState(false);
   const [reprocessingNoteIds, setReprocessingNoteIds] = useState([]);
   const [exerciseProgress, setExerciseProgress] = useState({});
   const [failedExerciseIds, setFailedExerciseIds] = useState([]);
@@ -903,7 +904,7 @@ export default function SubjectView() {
     setCancelledNoteIds(prev => prev.filter(id => id !== noteIdToReprocess));
     setReprocessingNoteIds(prev => [...prev, noteIdToReprocess]);
     try {
-      const res = await fetchApi(`/resources/${noteIdToReprocess}/reprocess`, {
+      const res = await fetchApi(`/resources/${noteIdToReprocess}/reprocess?use_ai_polish=${reprocessUseAiPolish}`, {
         method: 'POST'
       });
       notifyTaskStarted();
@@ -1665,9 +1666,19 @@ export default function SubjectView() {
       </Modal>
 
       <Modal opened={reprocessNoteModalOpened} onClose={closeReprocessNoteModal} title="Reprocess Note" centered>
-        <Text size="sm" mb="lg">
-          Are you sure you want to reprocess <b>{reprocessingNote?.title}</b>? This will extract all content from the file again, completely replacing the current extraction and embeddings. Existing summaries will be kept. This operation might take a while.
-        </Text>
+        <Stack gap="md" mb="lg">
+          <Text size="sm">
+            Are you sure you want to reprocess <b>{reprocessingNote?.title}</b>? This will extract all content from the file again, completely replacing the current extraction and embeddings. Existing summaries will be kept.
+          </Text>
+          <Card withBorder radius="md" p="sm" bg="var(--mantine-color-default-hover)">
+            <Switch
+              label="AI Polish"
+              description="Use AI to polish text and formatting. Off by default for fast, layout-accurate extraction."
+              checked={reprocessUseAiPolish}
+              onChange={(e) => setReprocessUseAiPolish(e.currentTarget.checked)}
+            />
+          </Card>
+        </Stack>
         <Group justify="flex-end">
           <Button variant="default" onClick={closeReprocessNoteModal}>Cancel</Button>
           <Button color="orange" onClick={executeReprocessNote} loading={submitting}>Start Reprocessing</Button>

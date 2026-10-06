@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Box, Title, Text, Select, Button, Stack, Group, Progress, SimpleGrid, Card, SegmentedControl } from '@mantine/core';
+import { Box, Title, Text, Select, Button, Stack, Group, Progress, SimpleGrid, Card, SegmentedControl, Switch } from '@mantine/core';
 import { IconUpload, IconFile, IconX } from '@tabler/icons-react';
 import { Dropzone, PDF_MIME_TYPE, IMAGE_MIME_TYPE, MS_POWERPOINT_MIME_TYPE } from '@mantine/dropzone';
 import { fetchApi, notifyTaskStarted } from '../lib/api';
@@ -18,6 +18,7 @@ export default function UploadDocs() {
   const [selectedSubject, setSelectedSubject] = useState(initialSubjectId || null);
   const [uploadType, setUploadType] = useState(initialType);
   const [files, setFiles] = useState([]);
+  const [useAiPolish, setUseAiPolish] = useState(false);
   
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -107,6 +108,7 @@ export default function UploadDocs() {
       } else {
         const formData = new FormData();
         formData.append('subject_id', selectedSubject);
+        formData.append('use_ai_polish', useAiPolish);
         files.forEach(file => {
           formData.append('files', file);
         });
@@ -231,6 +233,17 @@ export default function UploadDocs() {
               </SimpleGrid>
             )}
           </Box>
+
+          {uploadType === 'resource' && (
+            <Card withBorder radius="md" p="sm" bg="var(--mantine-color-default-hover)">
+              <Switch
+                label="AI Polish"
+                description="Use AI to polish formatting and grammar. Off by default for fast, layout-accurate extraction."
+                checked={useAiPolish}
+                onChange={(e) => setUseAiPolish(e.currentTarget.checked)}
+              />
+            </Card>
+          )}
 
           {uploading && (
             <Box mt="sm">
