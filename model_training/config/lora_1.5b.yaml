@@ -1,26 +1,26 @@
-# MLX LoRA fine-tuning config for Qwen3.5:4b on M3 Pro 18 GB
+# MLX LoRA fine-tuning config for Qwen2.5 1.5B on M3 Pro 18 GB
 
-model: models/llm/qwen3.5-4b-4bit
+model: models/llm/qwen2.5-1.5b-4bit
 
 # LoRA — rank-8 is the sweet spot for 18 GB unified memory
-lora_layers: 12       # Adapt the last 12 transformer layers
+lora_layers: 8       # Adapt the last 8 of ~24 transformer layers
 lora_rank: 8          # Lower = less RAM. 8 is ideal for 18 GB.
 lora_alpha: 16        # Scaling (usually 2× rank)
 lora_dropout: 0.05
 
 # Training params
-num_iterations: 800
-batch_size: 1
+num_iterations: 600
+batch_size: 2
 learning_rate: 1.0e-4
 lr_schedule: cosine_decay
 weight_decay: 0.01
-grad_checkpoint: true # Save memory on larger model
+grad_checkpoint: false
 
 # Data
-train: data/training/train.jsonl
-valid: data/training/val.jsonl
+train: model_training/workspace/train.jsonl
+valid: model_training/workspace/val.jsonl
 max_seq_length: 4096  # Enough for a full lecture's markdown
 
 # Saving
-adapter_path: models/llm/velonote-4b-adapter
+adapter_path: models/llm/velonote-1.5b-adapter
 save_every: 100       # Checkpoint every 100 iterations

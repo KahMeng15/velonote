@@ -24,9 +24,12 @@ Output ONLY the markdown. No preamble. No explanation."""
 def build():
     examples = []
 
-    for raw_file in sorted(RAW_DIR.glob("*_raw.md")):
+    for raw_file in sorted(RAW_DIR.rglob("*_raw.md")):
         resource_id = raw_file.stem.replace("_raw", "")
-        polished_file = POLISHED_DIR / f"{resource_id}_polished.md"
+        
+        # Look for the polished file in the matching subfolder
+        rel_dir = raw_file.parent.relative_to(RAW_DIR)
+        polished_file = POLISHED_DIR / rel_dir / f"{resource_id}_polished.md"
 
         if not polished_file.exists():
             print(f"  SKIP {resource_id} — no polished version yet")

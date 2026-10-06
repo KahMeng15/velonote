@@ -19,7 +19,13 @@ RAW_DIR.mkdir(parents=True, exist_ok=True)
 
 def process_file(file_path: Path):
     resource_id = file_path.stem.replace(" ", "_")
-    out_path = RAW_DIR / f"{resource_id}_raw.md"
+    
+    # Mirror the folder structure
+    rel_dir = file_path.parent.relative_to(INPUT_DIR)
+    target_dir = RAW_DIR / rel_dir
+    target_dir.mkdir(parents=True, exist_ok=True)
+    
+    out_path = target_dir / f"{resource_id}_raw.md"
     
     if out_path.exists():
         print(f"Skipping {file_path.name} — raw file already exists.")
@@ -37,7 +43,7 @@ def process_file(file_path: Path):
         print(f"❌ Failed to process {file_path.name}: {e}")
 
 def main():
-    files = [f for f in INPUT_DIR.glob("*") if f.is_file() and f.name != ".gitkeep"]
+    files = [f for f in INPUT_DIR.rglob("*") if f.is_file() and not f.name.startswith(".")]
     
     if not files:
         print(f"No files found in {INPUT_DIR}.")

@@ -1,6 +1,6 @@
 # Local Model Training
 
-This directory contains configurations, documentation, and scripts for fine-tuning local models (e.g. Qwen 1.7b/4b) using MLX on Apple Silicon.
+This directory contains configurations, documentation, and scripts for fine-tuning local models (e.g. Qwen2.5 1.5B/3B) using MLX on Apple Silicon.
 
 ## Structure
 - `config/`: MLX LoRA YAML configuration files for different model sizes.
