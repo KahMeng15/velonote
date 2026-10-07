@@ -1474,19 +1474,15 @@ class SmartPipeline:
         try:
             from app.processing.ai_client import AIClient
 
-            # Create a client which will automatically use the 3-tier fallback system
-            client = AIClient()
+            # Create a client configured specifically for heavy document processing
+            client = AIClient(category="processing")
 
-            # Tier 1 (instant model) is for chat/exercises only — skip it for processing
-            if client.tiers:
-                client.tiers.pop(0)
-
-            # Only override Tier 0 with a specific Gemini key if Tier 0 is actually a Gemini tier.
-            # CRITICAL: Do NOT call _init_gemini_tier on a Groq/HuggingFace tier — it would
-            # corrupt tier.model by replacing the AsyncGroq client with a GenerativeModel.
-            if self.gemini_api_key and client.tiers and client.tiers[0].provider == "gemini":
-                client.tiers[0].api_key = self.gemini_api_key
-                client._init_gemini_tier(client.tiers[0])
+            # If an explicit Gemini key was passed, attach it to Gemini tiers
+            if self.gemini_api_key and client.tiers:
+                for t in client.tiers:
+                    if t.provider == "gemini" and not t.api_key:
+                        t.api_key = self.gemini_api_key
+                        client._init_gemini_tier(t)
 
             chunks = self._split_into_chunks(markdown)
             num_chunks = len(chunks)

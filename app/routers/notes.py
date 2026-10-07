@@ -367,7 +367,7 @@ async def generate_cheatsheet(
         )
 
     # Generate cheatsheet using AI
-    ai_client = AIClient(current_user, db=db)
+    ai_client = AIClient(current_user, db=db, category="processing")
 
     try:
         content = await ai_client.generate_summary(

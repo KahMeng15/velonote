@@ -365,7 +365,7 @@ class NoteTask:
 
             resource_content = "\n\n".join(content_parts) if content_parts else ""
 
-            ai_client = AIClient(user, db=db)
+            ai_client = AIClient(user, db=db, category="processing")
 
             start_time = time.time()
             task_id = kwargs.get("task_id")

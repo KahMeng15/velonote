@@ -37,68 +37,202 @@ class AITier:
 
 
 class AIClient:
-    """Unified AI client with 3-tier fallback system (Gemini -> Gemini -> Ollama)"""
+    """Unified AI client with category-based multi-tier fallback system.
 
-    def __init__(self, user: User | None = None, db: Session | None = None):
+    Categories:
+      - 'chat': For interactive chat, query classification, voice, and instant grading.
+                Prioritizes low latency.
+      - 'processing': For document extraction polish, notes generation, and heavy tasks.
+                      Prioritizes formatting accuracy and larger context.
+      - 'general': Defaults to chat tiers or legacy global tiers.
+    """
+
+    def __init__(
+        self,
+        user: User | None = None,
+        db: Session | None = None,
+        category: str = "general",
+    ):
         self.user = user
         self.db = db
+        self.category = category.lower()
         self.request_timeout_seconds = 240
         self.max_retries = 2  # Retries per tier
         self.retry_base_delay_seconds = 1.0
         self.last_successful_tier: AITier | None = None
 
-        # 1. Start with 3-tier defaults from .env settings
-        self.tiers: list[AITier] = [
-            AITier(
-                provider=settings.GLOBAL_AI_TIER1_PROVIDER,
-                model_name=settings.GLOBAL_AI_TIER1_MODEL,
-                api_key=settings.GLOBAL_AI_TIER1_API_KEY,
-                reasoning_level=settings.GLOBAL_AI_TIER1_REASONING_LEVEL,
-                base_url=settings.GLOBAL_AI_TIER1_BASE_URL or settings.OLLAMA_BASE_URL,
-            ),
-            AITier(
-                provider=settings.GLOBAL_AI_TIER2_PROVIDER,
-                model_name=settings.GLOBAL_AI_TIER2_MODEL,
-                api_key=settings.GLOBAL_AI_TIER2_API_KEY,
-                reasoning_level=settings.GLOBAL_AI_TIER2_REASONING_LEVEL,
-                base_url=settings.GLOBAL_AI_TIER2_BASE_URL or settings.OLLAMA_BASE_URL,
-            ),
-            AITier(
-                provider=settings.GLOBAL_AI_TIER3_PROVIDER,
-                model_name=settings.GLOBAL_AI_TIER3_MODEL,
-                api_key=settings.GLOBAL_AI_TIER3_API_KEY,
-                reasoning_level=settings.GLOBAL_AI_TIER3_REASONING_LEVEL,
-                base_url=settings.GLOBAL_AI_TIER3_BASE_URL or settings.OLLAMA_BASE_URL,
-            ),
-        ]
+        # Build tiers based on category
+        self.tiers: list[AITier] = self._build_tiers()
 
-        # Append optional Tier 4 if configured
-        if settings.GLOBAL_AI_TIER4_PROVIDER:
-            self.tiers.append(
-                AITier(
-                    provider=settings.GLOBAL_AI_TIER4_PROVIDER,
-                    model_name=settings.GLOBAL_AI_TIER4_MODEL,
-                    api_key=settings.GLOBAL_AI_TIER4_API_KEY,
-                    reasoning_level=settings.GLOBAL_AI_TIER4_REASONING_LEVEL,
-                    base_url=settings.GLOBAL_AI_TIER4_BASE_URL,
-                )
-            )
-
-        # 3. User-specific override (Legacy/Personal)
+        # User-specific override (Legacy/Personal)
         # If user has a personal provider configured and is NOT using global config,
         # we treat it as an additional Tier 0 (top priority).
         if user and not user.use_global_ai_config and user.ai_provider:
             logger.info(f"Applying User-specific AI override: {user.ai_provider} ({user.ai_model})")
             user_tier = AITier(
                 provider=user.ai_provider,
-                model_name=user.ai_model or settings.GLOBAL_AI_TIER1_MODEL,
-                api_key=settings.GLOBAL_AI_TIER1_API_KEY,
+                model_name=user.ai_model or (self.tiers[0].model_name if self.tiers else ""),
+                api_key=settings.GLOBAL_AI_TIER1_API_KEY or settings.GEMINI_API_KEY,
                 reasoning_level="medium",
                 base_url=user.ai_base_url,
             )
             self.tiers.insert(0, user_tier)
 
         self._init_tiers()
+
+    def _build_tiers(self) -> list[AITier]:
+        """Construct AITier list according to category with fallback to legacy global tiers."""
+        tiers: list[AITier] = []
+
+        if self.category == "chat":
+            raw_tiers = [
+                (
+                    settings.AI_CHAT_TIER1_PROVIDER or settings.GLOBAL_AI_TIER1_PROVIDER,
+                    settings.AI_CHAT_TIER1_MODEL or settings.GLOBAL_AI_TIER1_MODEL,
+                    settings.AI_CHAT_TIER1_API_KEY or settings.GLOBAL_AI_TIER1_API_KEY,
+                    settings.AI_CHAT_TIER1_REASONING_LEVEL or settings.GLOBAL_AI_TIER1_REASONING_LEVEL,
+                    settings.AI_CHAT_TIER1_BASE_URL or settings.GLOBAL_AI_TIER1_BASE_URL,
+                ),
+                (
+                    settings.AI_CHAT_TIER2_PROVIDER,
+                    settings.AI_CHAT_TIER2_MODEL,
+                    settings.AI_CHAT_TIER2_API_KEY,
+                    settings.AI_CHAT_TIER2_REASONING_LEVEL,
+                    settings.AI_CHAT_TIER2_BASE_URL,
+                ),
+                (
+                    settings.AI_CHAT_TIER3_PROVIDER,
+                    settings.AI_CHAT_TIER3_MODEL,
+                    settings.AI_CHAT_TIER3_API_KEY,
+                    settings.AI_CHAT_TIER3_REASONING_LEVEL,
+                    settings.AI_CHAT_TIER3_BASE_URL,
+                ),
+            ]
+        elif self.category == "processing":
+            fallback_p1 = settings.GLOBAL_AI_TIER2_PROVIDER or settings.GLOBAL_AI_TIER1_PROVIDER
+            fallback_m1 = settings.GLOBAL_AI_TIER2_MODEL or settings.GLOBAL_AI_TIER1_MODEL
+            fallback_k1 = settings.GLOBAL_AI_TIER2_API_KEY or settings.GLOBAL_AI_TIER1_API_KEY
+            fallback_r1 = settings.GLOBAL_AI_TIER2_REASONING_LEVEL or settings.GLOBAL_AI_TIER1_REASONING_LEVEL
+            fallback_b1 = settings.GLOBAL_AI_TIER2_BASE_URL or settings.GLOBAL_AI_TIER1_BASE_URL
+
+            fallback_p2 = settings.GLOBAL_AI_TIER3_PROVIDER
+            fallback_m2 = settings.GLOBAL_AI_TIER3_MODEL
+            fallback_k2 = settings.GLOBAL_AI_TIER3_API_KEY
+            fallback_r2 = settings.GLOBAL_AI_TIER3_REASONING_LEVEL
+            fallback_b2 = settings.GLOBAL_AI_TIER3_BASE_URL
+
+            raw_tiers = [
+                (
+                    settings.AI_PROCESSING_TIER1_PROVIDER or fallback_p1,
+                    settings.AI_PROCESSING_TIER1_MODEL or fallback_m1,
+                    settings.AI_PROCESSING_TIER1_API_KEY or fallback_k1,
+                    settings.AI_PROCESSING_TIER1_REASONING_LEVEL or fallback_r1,
+                    settings.AI_PROCESSING_TIER1_BASE_URL or fallback_b1,
+                ),
+                (
+                    settings.AI_PROCESSING_TIER2_PROVIDER or fallback_p2,
+                    settings.AI_PROCESSING_TIER2_MODEL or fallback_m2,
+                    settings.AI_PROCESSING_TIER2_API_KEY or fallback_k2,
+                    settings.AI_PROCESSING_TIER2_REASONING_LEVEL or fallback_r2,
+                    settings.AI_PROCESSING_TIER2_BASE_URL or fallback_b2,
+                ),
+                (
+                    settings.AI_PROCESSING_TIER3_PROVIDER,
+                    settings.AI_PROCESSING_TIER3_MODEL,
+                    settings.AI_PROCESSING_TIER3_API_KEY,
+                    settings.AI_PROCESSING_TIER3_REASONING_LEVEL,
+                    settings.AI_PROCESSING_TIER3_BASE_URL,
+                ),
+                (
+                    settings.AI_PROCESSING_TIER4_PROVIDER,
+                    settings.AI_PROCESSING_TIER4_MODEL,
+                    settings.AI_PROCESSING_TIER4_API_KEY,
+                    settings.AI_PROCESSING_TIER4_REASONING_LEVEL,
+                    settings.AI_PROCESSING_TIER4_BASE_URL,
+                ),
+            ]
+        else:  # "general"
+            if settings.AI_CHAT_TIER1_PROVIDER:
+                return self._build_tiers_chat()
+            return self._build_tiers_legacy()
+
+        for prov, model, key, reasoning, base_url in raw_tiers:
+            if not prov or not model:
+                continue
+            if prov == "gemini" and not key:
+                key = settings.GEMINI_API_KEY
+            elif prov == "huggingface" and not key:
+                key = settings.HUGGINGFACE_TOKEN
+            tiers.append(
+                AITier(
+                    provider=prov,
+                    model_name=model,
+                    api_key=key or "",
+                    reasoning_level=reasoning or "",
+                    base_url=base_url or (settings.OLLAMA_BASE_URL if prov == "ollama" else ""),
+                )
+            )
+
+        if not tiers:
+            return self._build_tiers_legacy()
+
+        return tiers
+
+    def _build_tiers_chat(self) -> list[AITier]:
+        orig = self.category
+        self.category = "chat"
+        res = self._build_tiers()
+        self.category = orig
+        return res
+
+    def _build_tiers_legacy(self) -> list[AITier]:
+        tiers: list[AITier] = []
+        for prov, model, key, reasoning, base_url in [
+            (
+                settings.GLOBAL_AI_TIER1_PROVIDER,
+                settings.GLOBAL_AI_TIER1_MODEL,
+                settings.GLOBAL_AI_TIER1_API_KEY,
+                settings.GLOBAL_AI_TIER1_REASONING_LEVEL,
+                settings.GLOBAL_AI_TIER1_BASE_URL,
+            ),
+            (
+                settings.GLOBAL_AI_TIER2_PROVIDER,
+                settings.GLOBAL_AI_TIER2_MODEL,
+                settings.GLOBAL_AI_TIER2_API_KEY,
+                settings.GLOBAL_AI_TIER2_REASONING_LEVEL,
+                settings.GLOBAL_AI_TIER2_BASE_URL,
+            ),
+            (
+                settings.GLOBAL_AI_TIER3_PROVIDER,
+                settings.GLOBAL_AI_TIER3_MODEL,
+                settings.GLOBAL_AI_TIER3_API_KEY,
+                settings.GLOBAL_AI_TIER3_REASONING_LEVEL,
+                settings.GLOBAL_AI_TIER3_BASE_URL,
+            ),
+            (
+                settings.GLOBAL_AI_TIER4_PROVIDER,
+                settings.GLOBAL_AI_TIER4_MODEL,
+                settings.GLOBAL_AI_TIER4_API_KEY,
+                settings.GLOBAL_AI_TIER4_REASONING_LEVEL,
+                settings.GLOBAL_AI_TIER4_BASE_URL,
+            ),
+        ]:
+            if not prov or not model:
+                continue
+            if prov == "gemini" and not key:
+                key = settings.GEMINI_API_KEY
+            elif prov == "huggingface" and not key:
+                key = settings.HUGGINGFACE_TOKEN
+            tiers.append(
+                AITier(
+                    provider=prov,
+                    model_name=model,
+                    api_key=key or "",
+                    reasoning_level=reasoning or "",
+                    base_url=base_url or (settings.OLLAMA_BASE_URL if prov == "ollama" else ""),
+                )
+            )
+        return tiers
 
     @property
     def provider(self) -> str:
@@ -788,5 +922,9 @@ class AIClient:
         )
 
 
-def get_ai_client(user: User | None = None, db: Session | None = None) -> AIClient:
-    return AIClient(user=user, db=db)
+def get_ai_client(
+    user: User | None = None,
+    db: Session | None = None,
+    category: str = "general",
+) -> AIClient:
+    return AIClient(user=user, db=db, category=category)

@@ -129,7 +129,7 @@ services:
     depends_on:
       - api
     ports:
-      - "${PUBLIC_PORT:-8000}:80"
+      - "${PUBLIC_PORT:-3000}:80"
     volumes:
       - ./logs:/app/logs
     restart: unless-stopped

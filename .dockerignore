@@ -24,20 +24,26 @@ data/
 generated/
 output/
 uploads/
+models/
+model_training/
+media/
 
 # Documentation and scripts
 docs/
 scripts/
 README.md
 GEMINI.md
+AGENTS.md
 instrument_sans.zip
 
 # Docker
 Dockerfile
 docker-compose.yml
+docker-compose.dev.yml
 .dockerignore
 
-# Node.js dependencies (massive, cause chown disk exhaustion)
+# Frontend (backend image does not need frontend source)
+frontend/
 **/node_modules/
 frontend/node_modules/
 .kilo/node_modules/

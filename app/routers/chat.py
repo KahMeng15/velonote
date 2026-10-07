@@ -763,7 +763,7 @@ async def ask_question_logic(**kwargs) -> dict:
         retrieval_ms = (time.time() - t_start) * 1000.0
 
         t_step2_start = time.time()
-        ai_client = AIClient(current_user, db=db)
+        ai_client = AIClient(current_user, db=db, category="chat")
 
         conv_id = conversation_id
         conversation_context = ""

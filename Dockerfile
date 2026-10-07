@@ -69,8 +69,9 @@ if not os.path.exists(path):
     urllib.request.urlretrieve(url, path)
 PYEOF
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install /tmp/torch-wheels/torch-*+cpu-*.whl && \
-    pip install --default-timeout=1000 -r requirements.txt
+    pip install /tmp/torch-wheels/torch-*.whl && \
+    grep -v '^torch' requirements.txt > /tmp/requirements-notorch.txt && \
+    pip install --default-timeout=1000 --extra-index-url https://download.pytorch.org/whl/cpu -r /tmp/requirements-notorch.txt
 
 
 # --- Stage 2: Runtime ---

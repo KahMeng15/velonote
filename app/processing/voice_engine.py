@@ -1,15 +1,8 @@
 import os
 import sys
-from unittest.mock import MagicMock
+from io import BytesIO
 
 from pydub import AudioSegment
-
-# Mock deprecated TensorFlow estimator which malaya_boilerplate requires
-sys.modules['tensorflow.python.estimator'] = MagicMock()
-sys.modules['tensorflow.python.estimator.run_config'] = MagicMock()
-sys.modules['tensorflow.python.training.training_ops'] = MagicMock()
-
-from io import BytesIO
 
 from pywhispercpp.model import Model as WhisperModel
 
@@ -98,8 +91,8 @@ class VoiceEngine:
         Always respond in JSON format: {{"status": "...", "message": "...", "awarded_marks": 0, "max_marks": 0}}
         """
 
-        # Call global 3-tier AI System
-        client = AIClient()
+        # Call AI System (Chat category for low latency voice responses)
+        client = AIClient(category="chat")
         try:
             # We request raw_output=True and parse JSON manually just like other modules
             response_text = await client.generate_text(

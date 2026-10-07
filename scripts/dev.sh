@@ -12,7 +12,13 @@ fi
 # 1. Ensure logs directory exists
 mkdir -p logs
 
-# 2. Start the Background Worker in the background
+# 2. Ensure Database & Redis are running
+if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -q "velonote_db"; then
+    echo "Starting Database & Redis containers in background..."
+    docker compose -f docker-compose.dev.yml up -d db redis
+fi
+
+# 3. Start the Background Worker in the background
 echo "Starting Background Worker..."
 # Kill any existing zombie workers first
 pkill -f "python3 -m app.worker_main" || true

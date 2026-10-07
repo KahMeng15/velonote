@@ -466,7 +466,7 @@ Respond with ONLY the JSON object.
         groq_text = text[:GROQ_SAFE_CHARS] + ("... [truncated]" if len(text) > GROQ_SAFE_CHARS else "")
         prompt = _build_prompt(groq_text)
 
-        client = AIClient()
+        client = AIClient(category="processing")
         response = _run_async(
             client.generate_text,
             prompt=prompt,
@@ -708,7 +708,7 @@ def grade_answer(
     returning per-criterion mark breakdown."""
     from app.schemas.exercise import CriterionResult, GradeResponse
 
-    client = AIClient()
+    client = AIClient(category="chat")
 
     question_text = question.get("question_text", "")
     answer_text = question.get("answer_text", "")
@@ -835,7 +835,7 @@ def explain_answer(
         output_format: Output format preference
         scope: Context scope (source, web, both)
     """
-    client = AIClient()
+    client = AIClient(category="chat")
 
     question_text = question.get("question_text", "")
     answer_text = question.get("answer_text", "")
@@ -1062,7 +1062,7 @@ Each object must have the following keys:
 Respond with ONLY the JSON array.
 """
 
-            client = AIClient()
+            client = AIClient(category="processing")
             response = _run_async(
                 client.generate_text,
                 prompt=prompt,

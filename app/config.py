@@ -190,7 +190,8 @@ class Settings(BaseSettings):
     # Server
     HOST: str = "0.0.0.0"  # nosec
     API_PORT: int = 8000  # uvicorn bind port (internal)
-    PUBLIC_PORT: int = 8000  # nginx / host-facing port (external)
+    FRONTEND_PORT: int = 5173  # vite dev server port (development)
+    PUBLIC_PORT: int = 3000  # nginx / host-facing port (external)
 
     # SMTP
     SMTP_HOST: str = ""
@@ -200,29 +201,81 @@ class Settings(BaseSettings):
     SMTP_SENDER_NAME: str = "VeloNote"
     SMTP_TLS: bool = True
 
-    # Global AI Configuration (3-Tier Fallback)
-    GLOBAL_AI_TIER1_PROVIDER: str = "groq"
-    GLOBAL_AI_TIER1_MODEL: str = "llama-3.1-8b-instant"
+    # ==================================================================
+    # AI Configuration — Category 1: Chat / Instant Response
+    # ==================================================================
+    # Used for conversational chat, query rewrite, voice, and instant grading.
+    # Prioritizes low latency and fast time-to-first-token.
+    AI_CHAT_TIER1_PROVIDER: str = "groq"
+    AI_CHAT_TIER1_MODEL: str = "llama-3.1-8b-instant"
+    AI_CHAT_TIER1_API_KEY: str = ""
+    AI_CHAT_TIER1_REASONING_LEVEL: str = "low"
+    AI_CHAT_TIER1_BASE_URL: str = ""
+
+    AI_CHAT_TIER2_PROVIDER: str = "gemini"
+    AI_CHAT_TIER2_MODEL: str = "gemini-2.5-flash"
+    AI_CHAT_TIER2_API_KEY: str = ""
+    AI_CHAT_TIER2_REASONING_LEVEL: str = ""
+    AI_CHAT_TIER2_BASE_URL: str = ""
+
+    AI_CHAT_TIER3_PROVIDER: str = ""
+    AI_CHAT_TIER3_MODEL: str = ""
+    AI_CHAT_TIER3_API_KEY: str = ""
+    AI_CHAT_TIER3_REASONING_LEVEL: str = ""
+    AI_CHAT_TIER3_BASE_URL: str = ""
+
+    # ==================================================================
+    # AI Configuration — Category 2: Document Processing & Heavy Tasks
+    # ==================================================================
+    # Used for document extraction polish, notes generation, and exercises.
+    # Prioritizes formatting accuracy, instruction adherence, and larger context.
+    AI_PROCESSING_TIER1_PROVIDER: str = "ollama"
+    AI_PROCESSING_TIER1_MODEL: str = "qwen2.5:1.5b"
+    AI_PROCESSING_TIER1_API_KEY: str = ""
+    AI_PROCESSING_TIER1_REASONING_LEVEL: str = "low"
+    AI_PROCESSING_TIER1_BASE_URL: str = "http://ollama:11434"
+
+    AI_PROCESSING_TIER2_PROVIDER: str = "groq"
+    AI_PROCESSING_TIER2_MODEL: str = "llama-3.3-70b-versatile"
+    AI_PROCESSING_TIER2_API_KEY: str = ""
+    AI_PROCESSING_TIER2_REASONING_LEVEL: str = "low"
+    AI_PROCESSING_TIER2_BASE_URL: str = ""
+
+    AI_PROCESSING_TIER3_PROVIDER: str = "gemini"
+    AI_PROCESSING_TIER3_MODEL: str = "models/gemma-4-26b-a4b-it"
+    AI_PROCESSING_TIER3_API_KEY: str = ""
+    AI_PROCESSING_TIER3_REASONING_LEVEL: str = "high"
+    AI_PROCESSING_TIER3_BASE_URL: str = ""
+
+    AI_PROCESSING_TIER4_PROVIDER: str = ""
+    AI_PROCESSING_TIER4_MODEL: str = ""
+    AI_PROCESSING_TIER4_API_KEY: str = ""
+    AI_PROCESSING_TIER4_REASONING_LEVEL: str = ""
+    AI_PROCESSING_TIER4_BASE_URL: str = ""
+
+    # Legacy Global AI Configuration (fallback if category-specific vars are unset)
+    GLOBAL_AI_TIER1_PROVIDER: str = ""
+    GLOBAL_AI_TIER1_MODEL: str = ""
     GLOBAL_AI_TIER1_API_KEY: str = ""
     GLOBAL_AI_TIER1_REASONING_LEVEL: str = ""
     GLOBAL_AI_TIER1_BASE_URL: str = ""
 
-    GLOBAL_AI_TIER2_PROVIDER: str = "groq"
-    GLOBAL_AI_TIER2_MODEL: str = "llama-3.3-70b-versatile"
+    GLOBAL_AI_TIER2_PROVIDER: str = ""
+    GLOBAL_AI_TIER2_MODEL: str = ""
     GLOBAL_AI_TIER2_API_KEY: str = ""
-    GLOBAL_AI_TIER2_REASONING_LEVEL: str = "low"
+    GLOBAL_AI_TIER2_REASONING_LEVEL: str = ""
     GLOBAL_AI_TIER2_BASE_URL: str = ""
 
-    GLOBAL_AI_TIER3_PROVIDER: str = "gemini"
-    GLOBAL_AI_TIER3_MODEL: str = "models/gemma-4-26b-a4b-it"
+    GLOBAL_AI_TIER3_PROVIDER: str = ""
+    GLOBAL_AI_TIER3_MODEL: str = ""
     GLOBAL_AI_TIER3_API_KEY: str = ""
     GLOBAL_AI_TIER3_BASE_URL: str = ""
-    GLOBAL_AI_TIER3_REASONING_LEVEL: str = "high"
+    GLOBAL_AI_TIER3_REASONING_LEVEL: str = ""
 
     GLOBAL_AI_TIER4_PROVIDER: str = ""
     GLOBAL_AI_TIER4_MODEL: str = ""
     GLOBAL_AI_TIER4_API_KEY: str = ""
-    GLOBAL_AI_TIER4_REASONING_LEVEL: str = "low"
+    GLOBAL_AI_TIER4_REASONING_LEVEL: str = ""
     GLOBAL_AI_TIER4_BASE_URL: str = ""
 
     # Legacy / individual AI fallbacks

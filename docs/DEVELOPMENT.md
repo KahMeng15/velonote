@@ -35,11 +35,20 @@ cp .env.example .env
 
 ### 3. Start Development Environment
 ```bash
-docker-compose -f docker-compose.dev.yml up --build
+# Start all dev containers with file watchers
+docker compose -f docker-compose.dev.yml up
+
+# Or with built-in local Ollama:
+docker compose -f docker-compose.dev.yml --profile builtin up
+
+# Or using the dev script:
+./scripts/dev.sh --docker
 ```
-- **Application:** [http://localhost:8000](http://localhost:8000)
-- **API Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Frontend UI (Vite HMR):** [http://localhost:5173](http://localhost:5173)
+- **API Server & OpenAPI Docs:** [http://localhost:8000](http://localhost:8000) / [http://localhost:8000/docs](http://localhost:8000/docs)
 - **Postgres:** Exposed on port `5432` for local inspection.
+- **Redis:** Exposed on port `6379`.
+- **Ollama:** Exposed on port `11434` (when running with `--profile builtin`).
 
 ---
 

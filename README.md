@@ -40,9 +40,9 @@ velonote uses a **Multi-Container Architecture** to ensure reliable background p
 - **Embeddings**: sentence-transformers (Local, CPU-based)
 - **Deployment**: Docker Compose
 
-## 🚀 Quick Start (Docker Compose)
+## 🚀 Quick Start (Production / Full Stack)
 
-The recommended way to run velonote is using Docker Compose.
+The easiest way to run the full production stack is using Docker Compose:
 
 ### 1. Setup
 ```bash
@@ -55,54 +55,128 @@ cp .env.example .env
 ```
 
 #### Configuration (`.env`)
-Configure the following core options in your `.env` file:
+Configure the core options in your `.env` file:
 * **Database Configuration**:
-  The application automatically constructs the connection string from individual variables. **Do not use a raw `DATABASE_URL` variable**, as the settings validator ignores it in favor of:
+  The application automatically constructs the connection string from individual variables. **Do not set a raw `DATABASE_URL` variable**:
   ```env
   DB_USER=velonote
   DB_PASSWORD=velonotepassword
-  DB_HOST=localhost # Use 'db' if running inside Docker Compose
+  DB_HOST=localhost # Use 'db' when running inside Docker Compose
   DB_PORT=5432
   DB_NAME=velonote
   ```
-* **Global 3-Tier AI Fallback**:
-  Configure the three tiers of AI models to ensure uninterrupted processing in case of rate limits or provider failures. Gemma-4 reasoning models are supported and configured by default:
+* **Ports**:
   ```env
-  # Tier 1 (Primary - Gemini Gemma-4 31B Reasoning Model)
-  GLOBAL_AI_TIER1_PROVIDER=gemini
-  GLOBAL_AI_TIER1_MODEL=models/gemma-4-31b-it
-  GLOBAL_AI_TIER1_API_KEY=your_gemini_api_key
-  GLOBAL_AI_TIER1_REASONING_LEVEL=high
+  API_PORT=8000       # FastAPI backend internal port
+  FRONTEND_PORT=5173  # Vite React dev server port (development)
+  PUBLIC_PORT=3000    # Nginx reverse proxy host port (production)
+  ```
+* **Two-Category AI Configuration**:
+  velonote uses two dedicated AI categories to balance instant interactivity with heavy batch processing accuracy:
+  ```env
+  # Category 1: Chat / Instant Response (Conversational Q&A, voice, quick grading)
+  AI_CHAT_TIER1_PROVIDER=groq
+  AI_CHAT_TIER1_MODEL=llama-3.1-8b-instant
+  AI_CHAT_TIER1_API_KEY=your_api_key
+  AI_CHAT_TIER1_REASONING_LEVEL=low
 
-  # Tier 2 (Secondary - Gemini Gemma-4 26B MoE Reasoning Model)
-  GLOBAL_AI_TIER2_PROVIDER=gemini
-  GLOBAL_AI_TIER2_MODEL=models/gemma-4-26b-a4b-it
-  GLOBAL_AI_TIER2_API_KEY=your_gemini_api_key
-  GLOBAL_AI_TIER2_REASONING_LEVEL=high
+  AI_CHAT_TIER2_PROVIDER=gemini
+  AI_CHAT_TIER2_MODEL=gemini-2.5-flash
+  AI_CHAT_TIER2_API_KEY=your_gemini_key
 
-  # Tier 3 (Local Fallback - Ollama Llama 3)
-  GLOBAL_AI_TIER3_PROVIDER=ollama
-  GLOBAL_AI_TIER3_MODEL=llama3
-  GLOBAL_AI_TIER3_BASE_URL=http://localhost:11434
-  GLOBAL_AI_TIER3_REASONING_LEVEL=low
+  # Category 2: Document Processing & Heavy Tasks (AI polish, notes, question generation)
+  AI_PROCESSING_TIER1_PROVIDER=ollama
+  AI_PROCESSING_TIER1_MODEL=qwen2.5:1.5b
+  AI_PROCESSING_TIER1_BASE_URL=http://ollama:11434
+
+  AI_PROCESSING_TIER2_PROVIDER=groq
+  AI_PROCESSING_TIER2_MODEL=llama-3.3-70b-versatile
+  AI_PROCESSING_TIER2_API_KEY=your_api_key
+
+  AI_PROCESSING_TIER3_PROVIDER=gemini
+  AI_PROCESSING_TIER3_MODEL=models/gemma-4-26b-a4b-it
+  AI_PROCESSING_TIER3_API_KEY=your_gemini_key
+  AI_PROCESSING_TIER3_REASONING_LEVEL=high
   ```
 
-### 2. Launch
+### 2. Launch Production Stack
 ```bash
-# Start the full stack
-docker-compose up -d
+# Start the full stack with Nginx reverse proxy
+docker compose up -d --build
 ```
 
 **Services:**
-- **Web UI**: [http://localhost:8000](http://localhost:8000) (routed via Nginx reverse proxy)
+- **Web UI**: [http://localhost:3000](http://localhost:3000) (served via Nginx reverse proxy)
 - **API Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Redis Cache**: In-memory cache for sessions, tokens, and database requests.
-- **Logs**: View via `docker-compose logs -f` or in the `./logs` directory.
-- **Backups**: Automatic daily PostgreSQL backups to `./backups/postgres/` (see below).
+- **Redis Cache**: In-memory cache for sessions, tokens, and progress Pub/Sub.
+- **Logs**: View via `docker compose logs -f` or in the `./logs` directory.
+- **Backups**: Automatic daily PostgreSQL backups to `./backups/postgres/`.
+
+---
+
+## 🛠️ Development Setup
+
+velonote supports two development workflows: **Dev Containers with Live File Watchers** (recommended) or **Bare-Metal Local Development**.
+
+### Option A: Dev Containers with File Watchers (Recommended)
+
+Run the entire application stack in isolated containers with full hot-reloading and file watchers. No local Python or Node installation is required!
+
+#### How to Start
+```bash
+# 1. Start all dev containers (API + Worker + Frontend + DB + Redis)
+docker compose -f docker-compose.dev.yml up
+
+# Or use the convenience shortcut:
+./scripts/dev.sh --docker
+```
+
+#### Running with Built-in Local Ollama
+To include the local Ollama container (which automatically downloads the lightweight `qwen2.5:1.5b` model on first start):
+```bash
+docker compose -f docker-compose.dev.yml --profile builtin up
+```
+
+#### How the Dev Containers Work
+* **Backend API (`velonote_api_dev`)**: Runs `uvicorn` with `--reload` mounted to the project directory. Changes to backend Python files instantly trigger an API reload.
+* **Background Worker (`velonote_worker_dev`)**: Monitored by `watchfiles` (`watchfiles 'python -m app.worker_main' app/`). Any edits to extraction pipelines or task handlers automatically restart the worker process.
+* **Frontend Dev Server (`velonote_frontend_dev`)**: Runs Vite in dev mode (`npm run dev`) with Hot Module Replacement (HMR) and polling watchers enabled. Edits to React components reflect immediately in the browser.
+* **Volume Mounts**: The workspace is live-mounted into the containers. Dependencies are isolated in Docker volumes (`frontend_node_modules`) to keep host and container environments clean.
+
+#### Development Endpoints
+* **Frontend UI (Vite HMR)**: [http://localhost:5173](http://localhost:5173)
+* **Backend API & Swagger Docs**: [http://localhost:8000](http://localhost:8000) / [http://localhost:8000/docs](http://localhost:8000/docs)
+* **PostgreSQL**: `localhost:5432`
+* **Redis**: `localhost:6379`
+* **Local Ollama** (if `--profile builtin` enabled): `http://localhost:11434`
+
+---
+
+### Option B: Bare-Metal Local Development (Host OS)
+
+If you prefer running Python and Node directly on your host machine:
+
+```bash
+# 1. Start Database & Redis infrastructure only
+docker compose -f docker-compose.dev.yml up -d db redis
+
+# 2. Setup Python virtual environment
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+
+# 3. Install frontend dependencies
+cd frontend && npm install && cd ..
+
+# 4. Start all services concurrently (API, Worker, and Frontend)
+./scripts/dev.sh
+```
+
+---
 
 ### Database Backups
 
-A `db-backup` sidecar container runs automatically and:
+A `db-backup` sidecar container runs automatically:
 
 - **Daily**: Runs `pg_dump` once every 24 hours
 - **Retention**: Keeps backups for 7 days by default (configurable via Admin Panel → System Settings → `backup_retention_days`)
@@ -120,25 +194,6 @@ docker compose up -d
 ### PostgreSQL Note
 
 The database uses a **Docker named volume** (`pgdata`) to avoid filesystem permission issues on Linux/TrueNAS. The data is not directly visible on the host, but backups are written to `./backups/postgres/` for easy access.
-
----
-
-### Option 2: Python (Local Development)
-
-For faster iteration during development, you can run the services manually:
-
-```bash
-# 1. Start Infrastructure (Database + Redis)
-docker-compose up -d db redis
-
-# 2. Setup Venv
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
-# 3. Run Dev Script (Starts API + Worker)
-./scripts/dev.sh
-```
 
 ## 📚 Documentation
 
