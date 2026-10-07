@@ -129,19 +129,39 @@ async def process_next_task():
         db.close()
 
 
-async def main():
-    logger.info("Starting background worker (async mode)...")
+async def run_periodic_backup_loop():
+    """Periodically execute database backup every 24 hours."""
+    from app.utils.backup import perform_db_backup
+
+    # Wait 30 seconds after worker startup to let services stabilize
+    await asyncio.sleep(30)
     while True:
         try:
-            processed = await process_next_task()
-            if not processed:
-                await asyncio.sleep(0.5)  # Wait before polling again
-        except KeyboardInterrupt:
-            logger.info("Worker shutting down...")
-            break
+            logger.info("Executing scheduled database backup...")
+            await asyncio.to_thread(perform_db_backup)
         except Exception as e:
-            logger.error(f"Worker loop error: {e}")
-            await asyncio.sleep(5)
+            logger.error(f"Error during scheduled database backup: {e}")
+        # Sleep for 24 hours (86400s)
+        await asyncio.sleep(86400)
+
+
+async def main():
+    logger.info("Starting background worker (async mode)...")
+    backup_task = asyncio.create_task(run_periodic_backup_loop())
+    try:
+        while True:
+            try:
+                processed = await process_next_task()
+                if not processed:
+                    await asyncio.sleep(0.5)  # Wait before polling again
+            except KeyboardInterrupt:
+                logger.info("Worker shutting down...")
+                break
+            except Exception as e:
+                logger.error(f"Worker loop error: {e}")
+                await asyncio.sleep(5)
+    finally:
+        backup_task.cancel()
 
 
 if __name__ == "__main__":

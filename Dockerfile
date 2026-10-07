@@ -90,10 +90,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Install runtime dependencies (e.g., Tesseract for OCR, Poppler for PDF images, OpenCV deps, and FFmpeg for audio processing)
+# Install runtime dependencies (e.g., Tesseract for OCR, Poppler for PDF images, OpenCV deps, FFmpeg, and postgresql-client for backups)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     poppler-utils \
+    postgresql-client \
     libsm6 \
     libxext6 \
     libxrender-dev \
@@ -116,7 +117,7 @@ ARG GROUP_ID=568
 # Create non-root user and setup directories
 RUN groupadd --gid ${GROUP_ID} appgroup \
     && useradd --create-home --shell /usr/sbin/nologin --uid ${USER_ID} --gid ${GROUP_ID} appuser \
-    && mkdir -p /app/data /app/logs \
+    && mkdir -p /app/data /app/logs /app/backups \
     && chown -R appuser:appgroup /app
 
 # Prepare entrypoint script

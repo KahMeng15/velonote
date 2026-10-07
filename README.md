@@ -36,7 +36,7 @@ velonote uses a **Multi-Container Architecture** to ensure reliable background p
 - **API**: FastAPI (Request handling & Auth)
 - **Worker**: Python (Background processing: OCR, AI, Embeddings)
 - **Database**: PostgreSQL 15 (Persistent storage & Task Queue)
-- **Cache**: Redis (In-memory caching)
+- **Cache**: In-memory TTL cache (Zero-dependency thread-safe caching)
 - **Embeddings**: sentence-transformers (Local, CPU-based)
 - **Deployment**: Docker Compose
 
@@ -108,9 +108,8 @@ docker compose up -d --build
 **Services:**
 - **Web UI**: [http://localhost:3000](http://localhost:3000) (served via Nginx reverse proxy)
 - **API Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Redis Cache**: In-memory cache for sessions, tokens, and progress Pub/Sub.
 - **Logs**: View via `docker compose logs -f` or in the `./logs` directory.
-- **Backups**: Automatic daily PostgreSQL backups to `./backups/postgres/`.
+- **Backups**: Automatic daily PostgreSQL backups managed by worker to `./backups/postgres/`.
 
 ---
 
@@ -124,7 +123,7 @@ Run the entire application stack in isolated containers with full hot-reloading 
 
 #### How to Start
 ```bash
-# 1. Start all dev containers (API + Worker + Frontend + DB + Redis)
+# 1. Start all dev containers (API + Worker + Frontend + DB)
 docker compose -f docker-compose.dev.yml up
 
 # Or use the convenience shortcut:
@@ -139,7 +138,7 @@ docker compose -f docker-compose.dev.yml --profile builtin up
 
 #### How the Dev Containers Work
 * **Backend API (`velonote_api_dev`)**: Runs `uvicorn` with `--reload` mounted to the project directory. Changes to backend Python files instantly trigger an API reload.
-* **Background Worker (`velonote_worker_dev`)**: Monitored by `watchfiles` (`watchfiles 'python -m app.worker_main' app/`). Any edits to extraction pipelines or task handlers automatically restart the worker process.
+* **Background Worker (`velonote_worker_dev`)**: Monitored by `watchfiles` (`watchfiles 'python -m app.worker_main' app/`). Any edits to extraction pipelines or task handlers automatically restart the worker process. Also executes scheduled database backups.
 * **Frontend Dev Server (`velonote_frontend_dev`)**: Runs Vite in dev mode (`npm run dev`) with Hot Module Replacement (HMR) and polling watchers enabled. Edits to React components reflect immediately in the browser.
 * **Volume Mounts**: The workspace is live-mounted into the containers. Dependencies are isolated in Docker volumes (`frontend_node_modules`) to keep host and container environments clean.
 
@@ -147,7 +146,6 @@ docker compose -f docker-compose.dev.yml --profile builtin up
 * **Frontend UI (Vite HMR)**: [http://localhost:5173](http://localhost:5173)
 * **Backend API & Swagger Docs**: [http://localhost:8000](http://localhost:8000) / [http://localhost:8000/docs](http://localhost:8000/docs)
 * **PostgreSQL**: `localhost:5432`
-* **Redis**: `localhost:6379`
 * **Local Ollama** (if `--profile builtin` enabled): `http://localhost:11434`
 
 ---
@@ -157,8 +155,8 @@ docker compose -f docker-compose.dev.yml --profile builtin up
 If you prefer running Python and Node directly on your host machine:
 
 ```bash
-# 1. Start Database & Redis infrastructure only
-docker compose -f docker-compose.dev.yml up -d db redis
+# 1. Start Database infrastructure only
+docker compose -f docker-compose.dev.yml up -d db
 
 # 2. Setup Python virtual environment
 python -m venv venv
@@ -209,7 +207,7 @@ The database uses a **Docker named volume** (`pgdata`) to avoid filesystem permi
 | **Backend API** | FastAPI, Python 3.11+ | Web server & API logic |
 | **Worker** | Python (dedicated process) | Background processing (OCR, AI) |
 | **Database** | PostgreSQL 15 | Persistent storage & Task Queue |
-| **Cache** | Redis | In-memory caching (Notes, DB, API) |
+| **Cache** | In-memory TTL Cache | Thread-safe in-memory response caching |
 | **Vector Storage** | PostgreSQL + sentence-transformers | Semantic search |
 | **Document Extraction** | pdfplumber, python-pptx | PDF/PPTX parsing |
 | **OCR** | Tesseract + pytesseract | Scanned document support |

@@ -17,8 +17,8 @@ velonote is a multi-container web application designed to convert lecture materi
 ### Development Environment (Local)
 To run the project locally for development with hot-reloading:
 ```bash
-# 1. Start Infrastructure (Database + Redis)
-docker-compose up -d db redis
+# 1. Start Infrastructure (Database)
+docker-compose up -d db
 
 # 2. Setup virtual environment
 python -m venv venv

@@ -31,7 +31,7 @@ cd velonote
 # Create a .env file from the example
 cp .env.example .env
 ```
-*Note: Ensure individual database variables in `.env` are set correctly. If running via Docker Compose, set `DB_HOST=db` and `REDIS_URL=redis://redis:6379/0`. If running locally on the host machine, use `DB_HOST=localhost` and `REDIS_URL=redis://localhost:6379/0`.*
+*Note: Ensure individual database variables in `.env` are set correctly. If running via Docker Compose, set `DB_HOST=db`. If running locally on the host machine, use `DB_HOST=localhost`.*
 
 ### 3. Start Development Environment
 ```bash
@@ -47,7 +47,6 @@ docker compose -f docker-compose.dev.yml --profile builtin up
 - **Frontend UI (Vite HMR):** [http://localhost:5173](http://localhost:5173)
 - **API Server & OpenAPI Docs:** [http://localhost:8000](http://localhost:8000) / [http://localhost:8000/docs](http://localhost:8000/docs)
 - **Postgres:** Exposed on port `5432` for local inspection.
-- **Redis:** Exposed on port `6379`.
 - **Ollama:** Exposed on port `11434` (when running with `--profile builtin`).
 
 ---
@@ -57,9 +56,9 @@ docker compose -f docker-compose.dev.yml --profile builtin up
 If you prefer to run the Python code directly on your host machine for faster debugging:
 
 ### 1. Start Infrastructure
-The application requires PostgreSQL and Redis. Keep these containers running:
+The application requires PostgreSQL. Keep the container running:
 ```bash
-docker-compose up -d db redis
+docker-compose up -d db
 ```
 
 ### 2. Install Local Dependencies

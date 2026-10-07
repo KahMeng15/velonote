@@ -12,16 +12,18 @@ fi
 # 1. Ensure logs directory exists
 mkdir -p logs
 
-# 2. Ensure Database & Redis are running
+# 2. Ensure Database is running
 if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -q "velonote_db"; then
-    echo "Starting Database & Redis containers in background..."
-    docker compose -f docker-compose.dev.yml up -d db redis
+    echo "Starting Database container in background..."
+    docker compose -f docker-compose.dev.yml up -d db
 fi
 
 # 3. Start the Background Worker in the background
 echo "Starting Background Worker..."
-# Kill any existing zombie workers first
-pkill -f "python3 -m app.worker_main" || true
+# Kill any existing zombie workers and frontend servers first
+pkill -f "python3 -m app.worker_main" 2>/dev/null || true
+pkill -f "vite" 2>/dev/null || true
+
 python3 -m app.worker_main > logs/worker_stdout.log 2>&1 &
 WORKER_PID=$!
 
@@ -32,7 +34,7 @@ FRONTEND_PID=$!
 
 
 # Cleanup on exit (Must be defined before blocking commands)
-trap "kill $WORKER_PID $FRONTEND_PID; exit" SIGINT SIGTERM
+trap "kill $WORKER_PID $FRONTEND_PID 2>/dev/null; pkill -f 'vite' 2>/dev/null; exit" SIGINT SIGTERM EXIT
 
 # 4. Start the API Server (blocking)
 echo "Starting API Server on http://localhost:8000..."

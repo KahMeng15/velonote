@@ -107,14 +107,7 @@ async def lifespan(app: FastAPI):
     init_db()
     logger.info("Database initialized")
 
-    # Initialize Redis
-    try:
-        from app.utils.cache import get_redis_async
-
-        await get_redis_async()
-        logger.info("Redis cache initialized")
-    except Exception as e:
-        logger.warning(f"Redis initialization failed: {e}. App will proceed without caching.")
+    logger.info("In-memory cache initialized")
 
     try:
         from app.utils.tasks import TaskManager

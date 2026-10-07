@@ -3,7 +3,7 @@ import { Container, Title, Tabs, Table, Button, Group, Badge, Modal, Select, Tex
 import { useNavigate } from 'react-router-dom';
 import { useMediaQuery } from '@mantine/hooks';
 import { fetchApi, notifyTaskStarted } from '../lib/api';
-import { IconShieldCheck, IconUsers, IconMail, IconStack2, IconSettings, IconClock, IconServer, IconListDetails, IconDatabase, IconActivity, IconMessages, IconTrash, IconRefresh, IconEye, IconUserCheck } from '@tabler/icons-react';
+import { IconShieldCheck, IconUsers, IconMail, IconStack2, IconSettings, IconClock, IconServer, IconListDetails, IconDatabase, IconActivity, IconMessages, IconTrash, IconRefresh, IconEye, IconUserCheck, IconDownload, IconFileDatabase } from '@tabler/icons-react';
 
 const sectionTabsConfig = [
   { value: 'groups', label: 'Groups' },
@@ -588,6 +588,20 @@ function AdminSystemSettings() {
   };
   useEffect(() => { loadSettings(); }, []);
 
+  const [creatingBackup, setCreatingBackup] = useState(false);
+
+  const handleCreateBackup = async () => {
+    setCreatingBackup(true);
+    try {
+      const res = await fetchApi('/admin/backups/create', { method: 'POST' });
+      alert(res.message || 'Backup created successfully!');
+    } catch (e) {
+      alert(`Backup failed: ${e.message}`);
+    } finally {
+      setCreatingBackup(false);
+    }
+  };
+
   const save = async () => {
     try {
       await fetchApi('/admin/system-settings', {
@@ -613,9 +627,24 @@ function AdminSystemSettings() {
       <Paper p="md" withBorder>
         <Stack>
           <Title order={4}>Database Backups</Title>
+          <Text size="xs" c="dimmed">
+            Configure automated daily backup schedule. You can also view, download, and delete all SQL snapshots in the <strong>Database</strong> tab.
+          </Text>
           <Switch label="Enable automatic backups" checked={s.backup_enabled !== false} onChange={(e) => setS({...s, backup_enabled: e.currentTarget.checked})} />
           <NumberInput label="Retention (days)" value={s.backup_retention_days || 7} min={1} max={365} onChange={(v) => setS({...s, backup_retention_days: v})} />
-          <Button onClick={save} fullWidth={isMobile}>Save Settings</Button>
+          <Group wrap="wrap">
+            <Button onClick={save} fullWidth={isMobile}>Save Settings</Button>
+            <Button
+              variant="light"
+              color="blue"
+              onClick={handleCreateBackup}
+              loading={creatingBackup}
+              leftSection={<IconDatabase size={14} />}
+              fullWidth={isMobile}
+            >
+              Create Backup Now
+            </Button>
+          </Group>
         </Stack>
       </Paper>
     </Stack>
@@ -876,6 +905,288 @@ function AdminSystemLogs() {
   );
 }
 
+function AdminBackups() {
+  const [backups, setBackups] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [settings, setSettings] = useState({ backup_enabled: true, backup_retention_days: 7 });
+  const [savingSettings, setSavingSettings] = useState(false);
+  const isMobile = useMediaQuery('(max-width: 48em)');
+
+  const loadBackups = async () => {
+    setLoading(true);
+    try {
+      const data = await fetchApi('/admin/backups');
+      setBackups(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error('Failed to load backups:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadSettings = async () => {
+    try {
+      const data = await fetchApi('/admin/system-settings');
+      if (data) {
+        setSettings({
+          backup_enabled: data.backup_enabled !== false,
+          backup_retention_days: data.backup_retention_days || 7,
+        });
+      }
+    } catch (e) {
+      console.error('Failed to load system settings:', e);
+    }
+  };
+
+  useEffect(() => {
+    loadBackups();
+    loadSettings();
+  }, []);
+
+  const handleCreateBackup = async () => {
+    setCreating(true);
+    try {
+      const res = await fetchApi('/admin/backups/create', { method: 'POST' });
+      alert(res.message || 'Backup created successfully!');
+      loadBackups();
+    } catch (e) {
+      alert(`Backup failed: ${e.message}`);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleDownload = async (filename) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/admin/backups/${encodeURIComponent(filename)}/download`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.detail || `Download failed with HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      alert(`Failed to download backup: ${e.message}`);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await fetchApi(`/admin/backups/${encodeURIComponent(deleteTarget)}`, { method: 'DELETE' });
+      setDeleteTarget(null);
+      loadBackups();
+    } catch (e) {
+      alert(`Failed to delete backup: ${e.message}`);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    setSavingSettings(true);
+    try {
+      const current = await fetchApi('/admin/system-settings');
+      await fetchApi('/admin/system-settings', {
+        method: 'PUT',
+        body: JSON.stringify({
+          ...current,
+          backup_enabled: settings.backup_enabled,
+          backup_retention_days: settings.backup_retention_days,
+        }),
+      });
+      alert('Backup settings saved!');
+    } catch (e) {
+      alert(`Failed to save settings: ${e.message}`);
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
+  const totalBytes = backups.reduce((acc, b) => acc + (b.size_bytes || 0), 0);
+  const formatTotalSize = (bytes) => {
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  };
+
+  return (
+    <Stack gap="lg">
+      <Paper p="md" withBorder>
+        <Stack gap="sm">
+          <Group justify="space-between" wrap="wrap">
+            <div>
+              <Title order={4}>Automated Backup Schedule</Title>
+              <Text size="xs" c="dimmed">
+                The background worker runs scheduled backups every 24 hours and cleans up older snapshots based on your retention policy.
+              </Text>
+            </div>
+            <Button
+              size="xs"
+              variant="outline"
+              onClick={handleSaveSettings}
+              loading={savingSettings}
+            >
+              Save Schedule
+            </Button>
+          </Group>
+          <Group grow={!isMobile} align="flex-end" wrap="wrap">
+            <Switch
+              label="Enable automated daily backups"
+              checked={settings.backup_enabled}
+              onChange={(e) => setSettings({ ...settings, backup_enabled: e.currentTarget.checked })}
+            />
+            <NumberInput
+              label="Retention period (days)"
+              description="Backups older than this are automatically pruned"
+              value={settings.backup_retention_days}
+              min={1}
+              max={365}
+              onChange={(v) => setSettings({ ...settings, backup_retention_days: Number(v) || 7 })}
+              style={{ maxWidth: 260 }}
+            />
+          </Group>
+        </Stack>
+      </Paper>
+
+      <Paper p="md" withBorder>
+        <Stack gap="md">
+          <Group justify="space-between" wrap="wrap">
+            <div>
+              <Group gap="xs">
+                <Title order={4}>Database Snapshots</Title>
+                <Badge variant="light" color="blue">
+                  {backups.length} {backups.length === 1 ? 'backup' : 'backups'} ({formatTotalSize(totalBytes)})
+                </Badge>
+              </Group>
+              <Text size="xs" c="dimmed">
+                Files stored in <code>./backups/postgres</code>. You can download or delete individual SQL dumps.
+              </Text>
+            </div>
+            <Group gap="xs">
+              <Button
+                size="xs"
+                variant="light"
+                leftSection={<IconRefresh size={14} />}
+                onClick={loadBackups}
+                loading={loading}
+              >
+                Refresh
+              </Button>
+              <Button
+                size="xs"
+                color="blue"
+                leftSection={<IconDatabase size={14} />}
+                onClick={handleCreateBackup}
+                loading={creating}
+              >
+                Create Backup Now
+              </Button>
+            </Group>
+          </Group>
+
+          {backups.length === 0 ? (
+            <Paper p="xl" withBorder style={{ textAlign: 'center' }}>
+              <Text c="dimmed" size="sm">No database backups found.</Text>
+              <Button
+                mt="sm"
+                size="xs"
+                variant="light"
+                onClick={handleCreateBackup}
+                loading={creating}
+              >
+                Generate First Backup
+              </Button>
+            </Paper>
+          ) : (
+            <ScrollArea>
+              <Table striped horizontalSpacing={isMobile ? 'xs' : 'sm'}>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>Backup File</Table.Th>
+                    <Table.Th>Created At</Table.Th>
+                    <Table.Th>File Size</Table.Th>
+                    <Table.Th style={{ textAlign: 'right' }}>Actions</Table.Th>
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {backups.map((b) => (
+                    <Table.Tr key={b.filename}>
+                      <Table.Td style={{ fontFamily: 'monospace', fontWeight: 500 }}>
+                        <Group gap="xs">
+                          <IconFileDatabase size={16} color="var(--mantine-color-blue-6)" />
+                          <span>{b.filename}</span>
+                        </Group>
+                      </Table.Td>
+                      <Table.Td style={{ whiteSpace: 'nowrap' }}>
+                        {new Date(b.created_at).toLocaleString()}
+                      </Table.Td>
+                      <Table.Td>
+                        <Badge variant="outline" size="sm">{b.size_formatted}</Badge>
+                      </Table.Td>
+                      <Table.Td style={{ textAlign: 'right' }}>
+                        <Group gap="xs" justify="flex-end">
+                          <Button
+                            size="compact-xs"
+                            variant="light"
+                            leftSection={<IconDownload size={13} />}
+                            onClick={() => handleDownload(b.filename)}
+                          >
+                            Download
+                          </Button>
+                          <Button
+                            size="compact-xs"
+                            variant="subtle"
+                            color="red"
+                            leftSection={<IconTrash size={13} />}
+                            onClick={() => setDeleteTarget(b.filename)}
+                          >
+                            Delete
+                          </Button>
+                        </Group>
+                      </Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </ScrollArea>
+          )}
+        </Stack>
+      </Paper>
+
+      <Modal
+        opened={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete Database Backup"
+      >
+        <Stack>
+          <Text size="sm">
+            Are you sure you want to permanently delete <strong>{deleteTarget}</strong>?
+          </Text>
+          <Group justify="flex-end" mt="md">
+            <Button variant="default" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button color="red" onClick={handleDelete} loading={deleting}>Confirm Delete</Button>
+          </Group>
+        </Stack>
+      </Modal>
+    </Stack>
+  );
+}
+
 function AdminDatabase() {
   const [tables, setTables] = useState([]);
   const [selectedTable, setSelectedTable] = useState(null);
@@ -894,26 +1205,41 @@ function AdminDatabase() {
 
   return (
     <Stack>
-      <Title order={3}>Database</Title>
-      <Select label="Table" data={tables} value={selectedTable} onChange={setSelectedTable} searchable />
-      {selectedTable && (
-        <ScrollArea>
-          <Table striped horizontalSpacing={isMobile ? 'xs' : 'sm'}>
-            <Table.Thead>
-              <Table.Tr>
-                {data.columns.map(c => <Table.Th key={c}>{c}</Table.Th>)}
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {data.data.map((row, i) => (
-                <Table.Tr key={i}>
-                  {data.columns.map(c => <Table.Td key={c} style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>{String(row[c])}</Table.Td>)}
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </ScrollArea>
-      )}
+      <Title order={3}>Database Management</Title>
+      <Tabs defaultValue="backups">
+        <Tabs.List mb="md">
+          <Tabs.Tab value="backups" leftSection={<IconDatabase size={16} />}>Backups & Snapshots</Tabs.Tab>
+          <Tabs.Tab value="tables" leftSection={<IconListDetails size={16} />}>Table Browser</Tabs.Tab>
+        </Tabs.List>
+
+        <Tabs.Panel value="backups">
+          <AdminBackups />
+        </Tabs.Panel>
+
+        <Tabs.Panel value="tables">
+          <Stack gap="sm">
+            <Select label="Table" data={tables} value={selectedTable} onChange={setSelectedTable} searchable />
+            {selectedTable && (
+              <ScrollArea>
+                <Table striped horizontalSpacing={isMobile ? 'xs' : 'sm'}>
+                  <Table.Thead>
+                    <Table.Tr>
+                      {data.columns.map(c => <Table.Th key={c}>{c}</Table.Th>)}
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {data.data.map((row, i) => (
+                      <Table.Tr key={i}>
+                        {data.columns.map(c => <Table.Td key={c} style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>{String(row[c])}</Table.Td>)}
+                      </Table.Tr>
+                    ))}
+                  </Table.Tbody>
+                </Table>
+              </ScrollArea>
+            )}
+          </Stack>
+        </Tabs.Panel>
+      </Tabs>
     </Stack>
   );
 }

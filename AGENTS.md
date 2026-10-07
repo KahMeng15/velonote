@@ -4,7 +4,7 @@
 
 **Monolithic FastAPI app + dedicated background worker + React frontend (Vite + Mantine).** No Celery/Redis Queue — tasks are DB-backed (`Task` table polled by `worker_main.py`). Backend is API-only (no HTML/static served).
 
-- `app/main.py` — API entrypoint, registers routers, lifespan (init DB, Redis, bootstrap admin/templates), CORS/CSRF/rate-limit/security-headers middleware
+- `app/main.py` — API entrypoint, registers routers, lifespan (init DB, bootstrap admin/templates), CORS/CSRF/rate-limit/security-headers middleware
 - `app/worker_main.py` — polls `Task` table; handlers in `TASK_REGISTRY` dict (`app/worker_main.py:21`)
 - `app/models/db.py` — all SQLAlchemy ORM models (~580 lines)
 - `app/schemas/` — Pydantic models (`schemas.py`, `admin.py`, `analytics.py`, `exercise.py`)
@@ -24,7 +24,7 @@ python -m uvicorn app.main:app --reload                      # API only
 python -m app.worker_main                                    # Worker only
 cd frontend && npm run dev                                   # Frontend only
 docker compose up -d --build                                 # Full prod stack
-docker compose -f docker-compose.dev.yml up -d db redis      # Infra only for local dev
+docker compose -f docker-compose.dev.yml up -d db            # Infra only for local dev
 cd frontend && npm run lint                                  # Frontend lint
 python scripts/resource_processing_test/process_all.py        # One-command: drop file in input/, run this
 python scripts/resource_processing_test/run_test.py           # Offline extraction test (all formats + images)
@@ -136,3 +136,14 @@ Startup blocks if: `SECRET_KEY < 32 chars`, `DATABASE_URL` not PostgreSQL, or CO
 **Problem:** The right sidebar (exercise info, smart actions, export) was visible during processing, cluttering the view.
 
 **Fix:** Wrapped the sidebar `Box` in `{!taskActive && (...)}` (`ExerciseView.jsx:931-1111`) to hide it while a task is active.
+
+### 2026-10-07 — Remove Redis and integrate DB backup management in Worker and Admin UI
+
+**Problem:** Too many redundant containers (`db-backup`, `redis`). Database backups lacked admin UI controls to trigger, list, download, or delete snapshots.
+
+**Fix:**
+- Removed Redis container and dependencies completely, replacing it with a thread-safe `InMemoryTTLCache` in `app/utils/cache.py`.
+- Consolidated daily automated database backups into `app/worker_main.py` via `app/utils/backup.py`.
+- Added backup management endpoints in `app/routers/admin.py` (`GET /admin/backups`, `POST /admin/backups/create`, `GET /admin/backups/{filename}/download`, `DELETE /admin/backups/{filename}`).
+- Integrated interactive backup management in `Admin.jsx` with a snapshots table, instant backup creation, download, delete, and retention schedule controls.
+

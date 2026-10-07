@@ -178,8 +178,11 @@ class Settings(BaseSettings):
     DB_PORT: int = 5432
     DB_NAME: str = "velonote"
 
-    # Redis
-    REDIS_URL: str = "redis://localhost:6379/0"
+    # Database Backups
+    BACKUP_DIR: str = "backups/postgres"
+
+    # Redis (deprecated - cache is now in-memory)
+    REDIS_URL: str = ""
 
     # JWT — auto-generated into secrets.env on first run
     SECRET_KEY: str = ""

@@ -1,9 +1,13 @@
 """Admin Dashboard Router"""
 
 import datetime
+import logging
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import FileResponse
+
+logger = logging.getLogger(__name__)
 from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
@@ -849,6 +853,72 @@ def get_table_data(
         data.append(row_dict)
 
     return {"table": table_name, "columns": list(columns), "data": data, "count": len(data)}
+
+
+# --- Database Backups ---
+@router.get("/backups")
+def get_backups(admin: User = Depends(get_current_admin_user)):
+    """List all available database backups."""
+    from app.utils.backup import list_backups
+
+    return list_backups()
+
+
+@router.post("/backups/create")
+def trigger_backup(admin: User = Depends(get_current_admin_user)):
+    """Trigger an immediate database backup."""
+    from app.utils.backup import create_manual_backup
+
+    try:
+        backup_info = create_manual_backup()
+        return {
+            "success": True,
+            "message": "Database backup created successfully",
+            "backup": backup_info,
+        }
+    except Exception as e:
+        logger.error(f"Manual database backup failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/backups/{filename}/download")
+def download_backup(filename: str, admin: User = Depends(get_current_admin_user)):
+    """Download a database backup file."""
+    from app.utils.backup import get_backup_file_path
+
+    try:
+        file_path = get_backup_file_path(filename)
+        return FileResponse(
+            path=str(file_path),
+            filename=filename,
+            media_type="application/sql",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Download backup error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/backups/{filename}")
+def delete_backup(filename: str, admin: User = Depends(get_current_admin_user)):
+    """Delete a specific database backup file."""
+    from app.utils.backup import delete_backup_file
+
+    try:
+        deleted = delete_backup_file(filename)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Backup file not found")
+        return {"success": True, "message": f"Backup '{filename}' deleted successfully"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Delete backup error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # --- HTTP Status Codes Diagnostics ---
