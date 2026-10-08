@@ -510,6 +510,8 @@ class OCRTask:
                 file_type = (
                     "application/vnd.openxmlformats-officedocument.presentationml.presentation"
                 )
+            elif file_path.endswith(".ppt"):
+                file_type = "application/vnd.ms-powerpoint"
             elif file_path.lower().endswith((".png", ".jpg", ".jpeg")):
                 file_type = "image/jpeg"
             else:

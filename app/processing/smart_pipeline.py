@@ -124,6 +124,8 @@ class SmartPipeline:
             return self._process_pdf(file_path)
         elif ext == ".pptx":
             return self._process_pptx(file_path)
+        elif ext == ".ppt":
+            return self._process_ppt(file_path)
         elif ext == ".docx":
             return self._process_docx(file_path)
         else:
@@ -1324,6 +1326,18 @@ class SmartPipeline:
 
         markdown = "\n".join(md_parts).strip() + "\n"
         return self._postprocess_pptx_markdown(markdown)
+
+    def _process_ppt(self, ppt_path: str) -> str:
+        """Process legacy .ppt file natively using PPTExtractor."""
+        logger.info(f"Processing legacy PPT natively: {ppt_path}")
+        from .ppt_extractor import PPTExtractor
+        import time
+        
+        start = time.time()
+        markdown = PPTExtractor.extract_text(ppt_path)
+        
+        self.timings["ppt_extraction"] = time.time() - start
+        return markdown
 
     def _looks_like_code(self, text: str) -> bool:
         """Return True if text appears to be code even without monospace metadata."""

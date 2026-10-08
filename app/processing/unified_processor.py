@@ -36,6 +36,7 @@ class UnifiedContentProcessor:
     SUPPORTED_EXTS = {
         ".pdf",
         ".pptx",
+        ".ppt",
         ".docx",
         ".txt",
         ".md",
@@ -128,6 +129,9 @@ class UnifiedContentProcessor:
 
         elif ext == ".pptx":
             bundle = self._process_pptx(file_path, resource_id, progress_callback)
+
+        elif ext == ".ppt":
+            bundle = self._process_ppt(file_path, resource_id, progress_callback)
 
         elif ext == ".docx":
             bundle = self._process_docx(file_path, resource_id, progress_callback)
@@ -290,6 +294,25 @@ class UnifiedContentProcessor:
             markdown=markdown_with_images,
             images=images,
             processing_path="native",
+            timings=timings,
+            warnings=warnings,
+        )
+
+    def _process_ppt(
+        self, file_path: str, resource_id: str, progress_callback: Callable | None = None
+    ) -> ContentBundle:
+        warnings = []
+        if progress_callback:
+            progress_callback(10, "Extracting text from legacy PPT...")
+
+        t0 = time.time()
+        markdown = self.smart_pipeline.process(file_path, progress_callback=progress_callback)
+        timings = {"text_extraction": time.time() - t0}
+        
+        return ContentBundle(
+            markdown=markdown,
+            images=[],
+            processing_path="native_ppt",
             timings=timings,
             warnings=warnings,
         )

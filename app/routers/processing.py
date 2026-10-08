@@ -60,10 +60,10 @@ async def smart_extract(
         raise HTTPException(status_code=400, detail="No file provided")
 
     ext = Path(file.filename).suffix.lower()
-    if ext not in (".pdf", ".pptx"):
+    if ext not in (".pdf", ".pptx", ".ppt", ".docx"):
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported file type: {ext}. Only .pdf and .pptx are supported.",
+            detail=f"Unsupported file type: {ext}. Only .pdf, .pptx, .ppt, and .docx are supported.",
         )
 
     # Read and save to temp file
@@ -133,8 +133,8 @@ async def smart_extract_download(
         raise HTTPException(status_code=400, detail="No file provided")
 
     ext = Path(file.filename).suffix.lower()
-    if ext not in (".pdf", ".pptx"):
-        raise HTTPException(status_code=400, detail="Only .pdf and .pptx supported")
+    if ext not in (".pdf", ".pptx", ".ppt", ".docx"):
+        raise HTTPException(status_code=400, detail="Only .pdf, .pptx, .ppt, and .docx supported")
 
     contents = await file.read()
     if len(contents) > 50 * 1024 * 1024:
@@ -197,9 +197,9 @@ def reprocess_smart(
 
     # Only PDF and PPTX supported by smart pipeline
     file_ext = Path(resource.file_path).suffix.lower()
-    if file_ext not in (".pdf", ".pptx"):
+    if file_ext not in (".pdf", ".pptx", ".ppt", ".docx"):
         raise HTTPException(
-            status_code=400, detail=f"Smart processing only supports PDF and PPTX (got {file_ext})"
+            status_code=400, detail=f"Smart processing only supports PDF, PPTX, PPT, and DOCX (got {file_ext})"
         )
 
     try:

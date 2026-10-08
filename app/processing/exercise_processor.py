@@ -352,7 +352,7 @@ def process_exercise_task(exercise_id: str, user_id: int, task_id: str | None = 
                 StorageManager.save_resource_json(exercise_id, "images", images_data)
                 StorageManager.save_resource_json(exercise_id, "image_map", bundle.image_map)
         except ImportError:
-            if file_ext in (".pdf", ".pptx", ".txt", ".md", ".docx"):
+            if file_ext in (".pdf", ".pptx", ".ppt", ".txt", ".md", ".docx"):
                 if file_ext == ".docx":
                     from docx import Document
 
