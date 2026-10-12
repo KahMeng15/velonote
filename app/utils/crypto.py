@@ -1,7 +1,7 @@
 """Cryptographic helpers for encrypting sensitive settings at rest."""
+
 import logging
 from functools import lru_cache
-from typing import Optional
 
 from cryptography.fernet import Fernet, InvalidToken
 
@@ -13,7 +13,7 @@ _ENCRYPTED_PREFIX = "enc:"
 
 
 @lru_cache(maxsize=1)
-def _get_cipher() -> Optional[Fernet]:
+def _get_cipher() -> Fernet | None:
     """Return a Fernet cipher instance when APP_ENCRYPTION_KEY is configured."""
     settings = get_settings()
     key = (settings.APP_ENCRYPTION_KEY or "").strip()
@@ -27,11 +27,11 @@ def _get_cipher() -> Optional[Fernet]:
         return None
 
 
-def is_encrypted_value(value: Optional[str]) -> bool:
+def is_encrypted_value(value: str | None) -> bool:
     return bool(value and value.startswith(_ENCRYPTED_PREFIX))
 
 
-def encrypt_secret(value: Optional[str]) -> Optional[str]:
+def encrypt_secret(value: str | None) -> str | None:
     """Encrypt a value when crypto is configured; otherwise return original value."""
     if not value:
         return value
@@ -47,7 +47,7 @@ def encrypt_secret(value: Optional[str]) -> Optional[str]:
     return f"{_ENCRYPTED_PREFIX}{token}"
 
 
-def decrypt_secret(value: Optional[str]) -> Optional[str]:
+def decrypt_secret(value: str | None) -> str | None:
     """Decrypt a value if it is encrypted and crypto is configured."""
     if not value:
         return value
@@ -59,7 +59,7 @@ def decrypt_secret(value: Optional[str]) -> Optional[str]:
     if not cipher:
         return value
 
-    token = value[len(_ENCRYPTED_PREFIX):]
+    token = value[len(_ENCRYPTED_PREFIX) :]
     try:
         return cipher.decrypt(token.encode("utf-8")).decode("utf-8")
     except InvalidToken:

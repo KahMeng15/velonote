@@ -1,11 +1,12 @@
 """Study sessions tracking endpoints"""
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
-from typing import List, Optional
+
 from datetime import datetime
 
-from app.models.db import User, StudySession, Lecture
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.models.db import Resource, StudySession, User
 from app.utils.auth import get_current_user
 from app.utils.db import get_db
 
@@ -13,30 +14,30 @@ router = APIRouter(prefix="/study-sessions", tags=["study-sessions"])
 
 
 class StudySessionCreate(BaseModel):
-    lecture_id: Optional[str] = None
-    session_type: str  # "quiz", "reading", "pomodoro_study", "pomodoro_break", "stopwatch"
+    resource_id: str | None = None
+    session_type: str  # "exercise", "reading", "pomodoro_study", "pomodoro_break", "stopwatch"
     duration_minutes: int
     questions_attempted: int = 0
     questions_correct: int = 0
-    score: Optional[float] = None
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
-    status: Optional[str] = "completed"
+    score: float | None = None
+    start_time: datetime | None = None
+    end_time: datetime | None = None
+    status: str | None = "completed"
 
 
 class StudySessionResponse(BaseModel):
     id: int
-    lecture_id: Optional[str] = None
+    resource_id: str | None = None
     session_type: str
     duration_minutes: int
     questions_attempted: int
     questions_correct: int
-    score: Optional[float]
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
-    status: Optional[str] = None
+    score: float | None
+    start_time: datetime | None = None
+    end_time: datetime | None = None
+    status: str | None = None
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 
@@ -64,14 +65,12 @@ class PomodoroSettings(BaseModel):
 
 
 @router.get("/settings", response_model=PomodoroSettings)
-async def get_pomodoro_settings(
-    current_user: User = Depends(get_current_user)
-):
+async def get_pomodoro_settings(current_user: User = Depends(get_current_user)):
     """Fetch user's Pomodoro duration preferences"""
     return PomodoroSettings(
         pomo_study_mins=current_user.pomo_study_mins or 25,
         pomo_break_mins=current_user.pomo_break_mins or 5,
-        pomo_long_break_mins=current_user.pomo_long_break_mins or 15
+        pomo_long_break_mins=current_user.pomo_long_break_mins or 15,
     )
 
 
@@ -79,7 +78,7 @@ async def get_pomodoro_settings(
 async def update_pomodoro_settings(
     settings: PomodoroSettings,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Update user's Pomodoro duration preferences"""
     current_user.pomo_study_mins = settings.pomo_study_mins
@@ -89,74 +88,70 @@ async def update_pomodoro_settings(
     return settings
 
 
-@router.get("/calendar", response_model=List[CalendarDay])
+@router.get("/calendar", response_model=list[CalendarDay])
 async def get_study_calendar(
-    days: int = 30,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    days: int = 30, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Get study session totals grouped by day for calendar visualization"""
-    from sqlalchemy import func, cast, Date
     from datetime import timedelta
-    
+
+    from sqlalchemy import Date, cast, func
+
     start_date = datetime.utcnow() - timedelta(days=days)
-    
-    sessions = db.query(
-        cast(StudySession.created_at, Date).label('day'),
-        StudySession.session_type,
-        func.sum(StudySession.duration_minutes).label('total_mins'),
-        func.count(StudySession.id).label('count')
-    ).filter(
-        StudySession.user_id == current_user.id,
-        StudySession.created_at >= start_date
-    ).group_by(
-        cast(StudySession.created_at, Date),
-        StudySession.session_type
-    ).all()
-    
+
+    sessions = (
+        db.query(
+            cast(StudySession.created_at, Date).label("day"),
+            StudySession.session_type,
+            func.sum(StudySession.duration_minutes).label("total_mins"),
+            func.count(StudySession.id).label("count"),
+        )
+        .filter(StudySession.user_id == current_user.id, StudySession.created_at >= start_date)
+        .group_by(cast(StudySession.created_at, Date), StudySession.session_type)
+        .all()
+    )
+
     # Process into daily buckets
     calendar = {}
     for day, s_type, mins, count in sessions:
         d_str = day.isoformat()
         if d_str not in calendar:
             calendar[d_str] = {"study": 0, "break": 0, "count": 0}
-        
+
         if "break" in s_type:
             calendar[d_str]["break"] += int(mins or 0)
         else:
             calendar[d_str]["study"] += int(mins or 0)
-        
+
         calendar[d_str]["count"] += count
-        
+
     results = [
         CalendarDay(
-            date=d,
-            study_minutes=v["study"],
-            break_minutes=v["break"],
-            sessions_count=v["count"]
-        ) for d, v in calendar.items()
+            date=d, study_minutes=v["study"], break_minutes=v["break"], sessions_count=v["count"]
+        )
+        for d, v in calendar.items()
     ]
-    
+
     return sorted(results, key=lambda x: x.date)
 
 
-@router.get("", response_model=List[StudySessionResponse])
+@router.get("", response_model=list[StudySessionResponse])
 async def get_study_sessions(
-    lecture_id: str = None,
-    session_type: str = None,
+    resource_id: str | None = None,
+    session_type: str | None = None,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Get study sessions for the current user"""
-    
+
     query = db.query(StudySession).filter(StudySession.user_id == current_user.id)
-    
-    if lecture_id:
-        query = query.filter(StudySession.lecture_id == lecture_id)
-    
+
+    if resource_id:
+        query = query.filter(StudySession.resource_id == resource_id)
+
     if session_type:
         query = query.filter(StudySession.session_type == session_type)
-    
+
     sessions = query.order_by(StudySession.created_at.desc()).all()
     return sessions
 
@@ -165,31 +160,29 @@ async def get_study_sessions(
 async def create_study_session(
     session: StudySessionCreate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Create a new study session record"""
-    
-    # Verify lecture belongs to user if provided
-    if session.lecture_id:
-        lecture = db.query(Lecture).filter(
-            Lecture.id == session.lecture_id,
-            Lecture.user_id == current_user.id
-        ).first()
-        
-        if not lecture:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Lecture not found"
-            )
-    
+
+    # Verify resource belongs to user if provided
+    if session.resource_id:
+        resource = (
+            db.query(Resource)
+            .filter(Resource.id == session.resource_id, Resource.user_id == current_user.id)
+            .first()
+        )
+
+        if not resource:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found")
+
     # Calculate score if questions attempted
     score = session.score
     if session.questions_attempted > 0 and not score:
         score = (session.questions_correct / session.questions_attempted) * 100
-    
+
     db_session = StudySession(
         user_id=current_user.id,
-        lecture_id=session.lecture_id,
+        resource_id=session.resource_id,
         session_type=session.session_type,
         duration_minutes=session.duration_minutes,
         questions_attempted=session.questions_attempted,
@@ -197,9 +190,9 @@ async def create_study_session(
         score=score,
         start_time=session.start_time or datetime.utcnow(),
         end_time=session.end_time or datetime.utcnow(),
-        status=session.status or "completed"
+        status=session.status or "completed",
     )
-    
+
     db.add(db_session)
     db.commit()
     db.refresh(db_session)
@@ -208,15 +201,12 @@ async def create_study_session(
 
 @router.get("/stats", response_model=StudySessionStats)
 async def get_study_stats(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Get study statistics for the current user"""
-    
-    sessions = db.query(StudySession).filter(
-        StudySession.user_id == current_user.id
-    ).all()
-    
+
+    sessions = db.query(StudySession).filter(StudySession.user_id == current_user.id).all()
+
     if not sessions:
         return StudySessionStats(
             total_sessions=0,
@@ -224,67 +214,59 @@ async def get_study_stats(
             average_session_duration=0.0,
             total_questions_attempted=0,
             total_questions_correct=0,
-            average_accuracy=0.0
+            average_accuracy=0.0,
         )
-    
+
     total_time = sum(s.duration_minutes for s in sessions)
     total_questions = sum(s.questions_attempted for s in sessions)
     total_correct = sum(s.questions_correct for s in sessions)
-    
+
     average_accuracy = (total_correct / total_questions * 100) if total_questions > 0 else 0.0
     average_session = total_time / len(sessions) if sessions else 0.0
-    
+
     return StudySessionStats(
         total_sessions=len(sessions),
         total_study_time=total_time,
         average_session_duration=average_session,
         total_questions_attempted=total_questions,
         total_questions_correct=total_correct,
-        average_accuracy=average_accuracy
+        average_accuracy=average_accuracy,
     )
 
 
 @router.get("/{session_id}", response_model=StudySessionResponse)
 async def get_study_session(
-    session_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    session_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Get a specific study session"""
-    
-    session = db.query(StudySession).filter(
-        StudySession.id == session_id,
-        StudySession.user_id == current_user.id
-    ).first()
-    
+
+    session = (
+        db.query(StudySession)
+        .filter(StudySession.id == session_id, StudySession.user_id == current_user.id)
+        .first()
+    )
+
     if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Study session not found"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Study session not found")
+
     return session
 
 
 @router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_study_session(
-    session_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    session_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Delete a study session"""
-    
-    session = db.query(StudySession).filter(
-        StudySession.id == session_id,
-        StudySession.user_id == current_user.id
-    ).first()
-    
+
+    session = (
+        db.query(StudySession)
+        .filter(StudySession.id == session_id, StudySession.user_id == current_user.id)
+        .first()
+    )
+
     if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Study session not found"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Study session not found")
+
     db.delete(session)
     db.commit()
     return None

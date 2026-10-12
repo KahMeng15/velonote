@@ -1,4 +1,4 @@
-# Available AI Models (Google AI Studio)
+# Available AI Models
 
 This document lists the models currently available through the Google Generative AI API, as discovered via the `list_models()` method. Use these identifiers in your `.env` or administrator dashboard.
 
@@ -45,4 +45,16 @@ Models optimized for specific data types or experimental features.
 ## 🛠️ Usage Notes
 - **API Key:** Ensure your `GEMINI_API_KEY` has permissions for the model series.
 - **Experimental Models:** Models marked with `preview` or `experimental` may have lower rate limits or inconsistent uptime.
-- **Thinking Mode:** Gemma 4 models require special handling for their `<|channel|>thought` tokens. See `docs/GEMMA4_SKILL.md` for implementation details.
+- **Thinking Mode:** Gemma 4 models require special handling for their `<|channel|>thought` tokens. See `docs/GEMMA4_GUIDE.md` for implementation details.
+
+## ⚡ Groq Models (Fast Inference)
+These models run on Groq's LPU architecture, providing extremely fast token generation speeds. Excellent for long context and reasoning tasks.
+
+| Model ID | Provider Name | Notes |
+|----------|---------------|-------|
+| `llama-3.3-70b-versatile` | `groq` | **Recommended Default** - Excellent reasoning and fast |
+| `llama-3.1-8b-instant` | `groq` | Highest speed, good for shorter/simpler queries |
+| `mixtral-8x7b-32768` | `groq` | Mixture of Experts, very fast and 32k context window |
+| `gemma2-9b-it` | `groq` | Google's Gemma 2 architecture on Groq |
+
+**Configuration:** Set `GLOBAL_AI_TIER1_PROVIDER=groq` and `GLOBAL_AI_TIER1_MODEL=<model-id>` in your `.env`. You will also need to provide your `GLOBAL_AI_TIER1_API_KEY` from Groq console.

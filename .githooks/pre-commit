@@ -1,0 +1,27 @@
+#!/bin/bash
+# Pre-commit hook: runs resource processing test suite when pipeline code changes.
+# Install: ln -sf ../../.githooks/pre-commit .git/hooks/pre-commit
+
+CHANGED_FILES=$(git diff --cached --name-only)
+if echo "$CHANGED_FILES" | grep -q "app/processing/"; then
+    echo "🔄 Processing pipeline changed. Running validation..."
+
+    REPO_ROOT=$(git rev-parse --show-toplevel)
+    cd "$REPO_ROOT"
+
+    if [ -f ".venv/bin/activate" ]; then
+        source .venv/bin/activate
+    fi
+
+    python scripts/resource_processing_test/run_test.py \
+        --expected-dir scripts/resource_processing_test/expected \
+        --output-dir scripts/resource_processing_test/output \
+        --quality-dir scripts/resource_processing_test/quality_reports \
+        2>&1 | tail -20
+
+    if [ ${PIPESTATUS[0]} -ne 0 ]; then
+        echo "❌ Test suite failed. Fix regressions before committing."
+        exit 1
+    fi
+    echo "✅ All pipeline tests pass."
+fi

@@ -1,36 +1,36 @@
 """WebSocket router for real-time updates"""
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Query
-from sqlalchemy.orm import Session
-from typing import Optional
+
 import logging
 
-from app.utils.db import get_db
-from app.utils.auth import decode_token
-from app.utils.websocket import manager
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from sqlalchemy.orm import Session
+
 from app.models.db import User
+from app.utils.auth import decode_token
+from app.utils.db import get_db
+from app.utils.websocket import manager
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ws", tags=["websocket"])
 
+
 @router.websocket("/updates")
 @router.websocket("/{token_param}")
 async def websocket_endpoint(
-    websocket: WebSocket,
-    token_param: Optional[str] = None,
-    db: Session = Depends(get_db)
+    websocket: WebSocket, token_param: str | None = None, db: Session = Depends(get_db)
 ):
     """
     WebSocket endpoint for real-time task updates.
     Accepts immediately to avoid handshake rejections, then validates.
     """
     await websocket.accept()
-    
+
     # Try to get token from various sources
     token = token_param
     if token == "updates":
         token = None
-        
+
     if not token:
         token = websocket.cookies.get("access_token")
     if not token:
@@ -63,7 +63,7 @@ async def websocket_endpoint(
     try:
         while True:
             # Keep connection alive and wait for client messages (if any)
-            data = await websocket.receive_text()
+            await websocket.receive_text()
             # We don't expect client messages for now, but we keep it to handle disconnects
     except WebSocketDisconnect:
         manager.disconnect(user.id, websocket)

@@ -3,17 +3,18 @@ Text processing module for cleaning, structuring, and formatting extracted OCR c
 Handles header detection, content cleanup, sentence joining, and structure analysis.
 """
 
-import re
 import logging
-from typing import List, Dict, Any, Optional, Tuple
-from dataclasses import dataclass, asdict
-from enum import Enum
+import re
+from dataclasses import dataclass
+from enum import StrEnum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class ContentType(str, Enum):
+class ContentType(StrEnum):
     """Content type classification"""
+
     H1 = "h1"  # Section header
     H2 = "h2"  # Topic header
     H3 = "h3"  # Subtopic header
@@ -33,21 +34,22 @@ class ContentType(str, Enum):
 @dataclass
 class ContentSegment:
     """Represents a content segment with metadata"""
+
     content: str
     content_type: ContentType
     page_number: int
     confidence: float = 0.9
-    original_lines: List[str] = None
-    metadata: Dict[str, Any] = None
+    original_lines: list[str] = None
+    metadata: dict[str, Any] = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary"""
         return {
             "content": self.content,
             "type": self.content_type.value,
             "page": self.page_number,
             "confidence": self.confidence,
-            "metadata": self.metadata or {}
+            "metadata": self.metadata or {},
         }
 
 
@@ -84,7 +86,9 @@ class HeaderDetector:
 
     def __init__(self):
         self.blacklist_regex = [re.compile(p, re.IGNORECASE) for p in self.BLACKLIST_PATTERNS]
-        self.footer_header_regex = [re.compile(p, re.IGNORECASE) for p in self.FOOTER_HEADER_PATTERNS]
+        self.footer_header_regex = [
+            re.compile(p, re.IGNORECASE) for p in self.FOOTER_HEADER_PATTERNS
+        ]
         self.list_regex = [re.compile(p) for p in self.LIST_PATTERNS]
 
     def is_blacklisted(self, text: str) -> bool:
@@ -92,7 +96,7 @@ class HeaderDetector:
         text = text.strip()
         if len(text) < 3:  # Too short
             return True
-        
+
         for pattern in self.blacklist_regex:
             if pattern.match(text):
                 logger.debug(f"Blacklisted: {text}")
@@ -128,14 +132,14 @@ class HeaderDetector:
         line_position: int,
         total_lines: int,
         avg_line_length: float,
-        font_size: Optional[float] = None,
-    ) -> Tuple[ContentType, float]:
+        font_size: float | None = None,
+    ) -> tuple[ContentType, float]:
         """
         Detect header level using multiple strategies
         Returns: (ContentType, confidence_score)
         """
         text = text.strip()
-        
+
         # Check for table rows first (before headers/lists)
         if self.is_table_row(text):
             # Skip table separator rows (|---|---|)
@@ -144,7 +148,7 @@ class HeaderDetector:
                 return ContentType.TABLE_ROW, 0.0
             else:
                 return ContentType.TABLE_ROW, 0.95
-        
+
         # Strategy 1: Font size detection (if available)
         if font_size:
             if font_size >= 18:
@@ -189,7 +193,6 @@ class HeaderDetector:
         return ContentType.BODY, 0.60
 
 
-
 class TextCleaner:
     """Cleans and normalizes extracted text"""
 
@@ -204,14 +207,14 @@ class TextCleaner:
         text = re.sub(r"^[\s]*\|[\s]*$", "", text, flags=re.MULTILINE)  # Orphaned pipes
         text = re.sub(r"[\s]+", " ", text)  # Multiple spaces to single space
         text = text.strip()
-        
+
         # Clean quotes and dashes
         text = text.replace(""", '"').replace(""", '"')
         text = text.replace("–", "-").replace("—", "-")
-        
+
         return text
 
-    def join_sentences(self, lines: List[str]) -> str:
+    def join_sentences(self, lines: list[str]) -> str:
         """
         Join multi-line sentences into single lines
         Uses punctuation and layout to determine sentence boundaries
@@ -237,7 +240,7 @@ class TextCleaner:
                 current_sentence = line
 
             # Check if sentence ends (ends with punctuation)
-            if re.search(r'[.!?;:]\s*$', current_sentence):
+            if re.search(r"[.!?;:]\s*$", current_sentence):
                 joined.append(current_sentence)
                 current_sentence = ""
 
@@ -249,10 +252,10 @@ class TextCleaner:
 
     def process_page_content(
         self,
-        lines: List[str],
+        lines: list[str],
         page_number: int,
-        confidence_scores: Optional[List[float]] = None,
-    ) -> List[ContentSegment]:
+        confidence_scores: list[float] | None = None,
+    ) -> list[ContentSegment]:
         """
         Process a page of text into structured segments
         Returns list of ContentSegment with proper classification
@@ -262,7 +265,7 @@ class TextCleaner:
 
         segments = []
         confidence_scores = confidence_scores or [0.9] * len(lines)
-        
+
         # Calculate average line length for header detection
         avg_line_length = sum(len(line) for line in lines) / max(len(lines), 1)
 
@@ -306,36 +309,41 @@ class TextCleaner:
             if content_type in [ContentType.BODY, ContentType.LIST]:
                 collected_lines = [line]
                 j = i + 1
-                
+
                 # Collect following lines until we hit a likely header or table row or end
                 while j < len(lines):
                     next_line = lines[j].strip()
-                    
+
                     if not next_line:
                         j += 1
                         continue
-                    
+
                     if self.header_detector.is_blacklisted(next_line):
                         break
-                    
+
                     next_type, next_conf = self.header_detector.detect_header_level(
                         next_line, j, len(lines), avg_line_length
                     )
-                    
+
                     # Break on headers or table rows
-                    if next_type in [ContentType.H1, ContentType.H2, ContentType.H3, ContentType.TABLE_ROW]:
+                    if next_type in [
+                        ContentType.H1,
+                        ContentType.H2,
+                        ContentType.H3,
+                        ContentType.TABLE_ROW,
+                    ]:
                         break
-                    
+
                     # Skip separator rows
                     if next_conf <= 0:
                         break
-                    
+
                     collected_lines.append(next_line)
                     j += 1
 
                 # Join collected lines
                 joined_text = self.join_sentences(collected_lines)
-                
+
                 if joined_text:
                     segment = ContentSegment(
                         content=self.clean_text(joined_text),
@@ -345,7 +353,7 @@ class TextCleaner:
                         original_lines=collected_lines,
                     )
                     segments.append(segment)
-                
+
                 i = j
             else:
                 # Header or TABLE_ROW - create single segment
@@ -366,20 +374,20 @@ def process_extracted_text(
     text: str,
     page_number: int = 0,
     split_by_newline: bool = True,
-) -> List[ContentSegment]:
+) -> list[ContentSegment]:
     """
     Main entry point for text processing
     Converts raw OCR text into structured segments
-    
+
     Args:
         text: Raw extracted text
         page_number: Page number for reference
         split_by_newline: Whether to split text by newlines first
-    
+
     Returns:
         List of ContentSegment objects
     """
     lines = text.split("\n") if split_by_newline else [text]
     cleaner = TextCleaner()
-    
+
     return cleaner.process_page_content(lines, page_number)

@@ -3,60 +3,55 @@ DOCX document generator for creating styled Word documents from structured conte
 Supports headings, lists, images, and professional styling.
 """
 
-import os
 import logging
-from typing import List, Optional
-from pathlib import Path
+import os
+import re
 from datetime import datetime
 
 from docx import Document
-from docx.shared import Pt, Inches, Cm, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.section import WD_ORIENT
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-import re
+from docx.shared import Cm, Inches, Pt, RGBColor
 
-from app.processing.text_processor import ContentSegment, ContentType
 from app.processing.image_extractor import ExtractedImage
+from app.processing.text_processor import ContentSegment, ContentType
 
 logger = logging.getLogger(__name__)
 
 
 class DocxGenerator:
     """Generates styled DOCX from structured content"""
-    
+
     # Page size mapping (width, height) in cm
     PAGE_SIZES = {
-        'A4': (21.0, 29.7),
-        'LETTER': (21.59, 27.94),
-        'LEGAL': (21.59, 35.56),
-        'A3': (29.7, 42.0),
+        "A4": (21.0, 29.7),
+        "LETTER": (21.59, 27.94),
+        "LEGAL": (21.59, 35.56),
+        "A3": (29.7, 42.0),
     }
 
     def __init__(
         self,
-        lecture_id: int,
-        lecture_title: str,
-        base_output_dir: str = "generated",
+        resource_id: str,
+        note_title: str,
     ):
-        self.lecture_id = lecture_id
-        self.lecture_title = lecture_title
-        self.base_output_dir = base_output_dir
-        self.output_dir = os.path.join(base_output_dir, str(lecture_id))
+        self.resource_id = resource_id
+        self.note_title = note_title
 
-        # Create output directory
-        Path(self.output_dir).mkdir(parents=True, exist_ok=True)
+        from app.utils.storage import StorageManager
+        self.output_dir = StorageManager.get_exports_dir_for_resource(resource_id)
 
         self.output_docx = os.path.join(self.output_dir, "OUTPUT.docx")
 
     def _set_cell_background(self, cell, fill_color):
         """Set background color for a table cell"""
-        if not fill_color or fill_color.lower() == '#ffffff':
+        if not fill_color or fill_color.lower() == "#ffffff":
             return
-        fill_color = fill_color.lstrip('#')
-        shading_elm = OxmlElement('w:shd')
-        shading_elm.set(qn('w:fill'), fill_color)
+        fill_color = fill_color.lstrip("#")
+        shading_elm = OxmlElement("w:shd")
+        shading_elm.set(qn("w:fill"), fill_color)
         cell._tc.get_or_add_tcPr().append(shading_elm)
 
     def _set_number_of_columns(self, section, cols):
@@ -64,17 +59,17 @@ class DocxGenerator:
         if cols <= 1:
             return
         sectPr = section._sectPr
-        cols_el = sectPr.xpath('./w:cols')[0]
-        cols_el.set(qn('w:num'), str(cols))
-        cols_el.set(qn('w:space'), '720') # 0.5 inch gap default (720 twentieths of a point)
+        cols_el = sectPr.xpath("./w:cols")[0]
+        cols_el.set(qn("w:num"), str(cols))
+        cols_el.set(qn("w:space"), "720")  # 0.5 inch gap default (720 twentieths of a point)
 
     def generate_docx(
         self,
-        content_segments: List[ContentSegment],
-        extracted_images: Optional[List[ExtractedImage]] = None,
+        content_segments: list[ContentSegment],
+        extracted_images: list[ExtractedImage] | None = None,
         include_toc: bool = True,
         include_cover: bool = True,
-        template_config: Optional[dict] = None,
+        template_config: dict | None = None,
         progress_callback=None,
     ) -> str:
         """
@@ -84,11 +79,11 @@ class DocxGenerator:
         try:
             extracted_images = extracted_images or []
             self._template_config = template_config
-            
+
             # Debug logging
             logger.info(f"[DOCX Export] Template config type: {type(template_config)}")
             logger.info(f"[DOCX Export] Template config value: {template_config}")
-            
+
             doc = Document()
 
             if progress_callback:
@@ -114,15 +109,17 @@ class DocxGenerator:
             if template_config and "page" in template_config:
                 page_cfg = template_config["page"]
                 size_name = page_cfg.get("size", "A4").upper()
-                width_cm, height_cm = self.PAGE_SIZES.get(size_name, self.PAGE_SIZES['A4'])
-                
+                width_cm, height_cm = self.PAGE_SIZES.get(size_name, self.PAGE_SIZES["A4"])
+
                 orientation = page_cfg.get("orientation", "portrait").lower()
                 if orientation == "landscape":
                     width_cm, height_cm = height_cm, width_cm
-                
-                margins = page_cfg.get("margins", {"top": 25, "bottom": 25, "left": 19, "right": 19})
+
+                margins = page_cfg.get(
+                    "margins", {"top": 25, "bottom": 25, "left": 19, "right": 19}
+                )
                 cols = int(page_cfg.get("columns", 1))
-                
+
                 for section in doc.sections:
                     section.page_width = Cm(width_cm)
                     section.page_height = Cm(height_cm)
@@ -136,9 +133,10 @@ class DocxGenerator:
             # Main content - Start a new section if columns > 1
             if cols > 1:
                 from docx.enum.section import WD_SECTION
+
                 new_section = doc.add_section(WD_SECTION.CONTINUOUS)
                 self._set_number_of_columns(new_section, cols)
-            
+
             if progress_callback:
                 progress_callback("Rendering content", 50)
             self._create_content(doc, content_segments, extracted_images)
@@ -152,10 +150,10 @@ class DocxGenerator:
             if progress_callback:
                 progress_callback("Saving document", 90)
             doc.save(self.output_docx)
-            
+
             if progress_callback:
                 progress_callback("Complete", 100)
-            
+
             logger.info(f"Generated DOCX: {self.output_docx}")
             return self.output_docx
 
@@ -171,27 +169,29 @@ class DocxGenerator:
         """
         font_obj.name = font_name
         rFonts = font_obj._element.get_or_add_rPr().get_or_add_rFonts()
-        rFonts.set(qn('w:ascii'), font_name)
-        rFonts.set(qn('w:hAnsi'), font_name)
-        rFonts.set(qn('w:eastAsia'), font_name)
-        rFonts.set(qn('w:cs'), font_name)
+        rFonts.set(qn("w:ascii"), font_name)
+        rFonts.set(qn("w:hAnsi"), font_name)
+        rFonts.set(qn("w:eastAsia"), font_name)
+        rFonts.set(qn("w:cs"), font_name)
 
     def _setup_styles(self, doc: Document):
         """Configure default document styles, applying template if available"""
-        tc = getattr(self, '_template_config', None) or {}
+        tc = getattr(self, "_template_config", None) or {}
         el_cfg = tc.get("elements", {})
         spacing_cfg = tc.get("spacing", {})
         code_cfg = tc.get("code_block", {})
-        
+
         font_family = tc.get("font_family", "Instrument Sans")
-        
+
         # Helper to parse hex color
         def hex_to_rgb(hex_str):
-            if not hex_str: return (0, 0, 0)
-            hex_str = hex_str.lstrip('#')
-            if len(hex_str) != 6: return (0, 0, 0)
-            return tuple(int(hex_str[i:i+2], 16) for i in (0, 2, 4))
-        
+            if not hex_str:
+                return (0, 0, 0)
+            hex_str = hex_str.lstrip("#")
+            if len(hex_str) != 6:
+                return (0, 0, 0)
+            return tuple(int(hex_str[i : i + 2], 16) for i in (0, 2, 4))
+
         # Normal style
         p_cfg = el_cfg.get("paragraph", {})
         style = doc.styles["Normal"]
@@ -207,15 +207,15 @@ class DocxGenerator:
         pf.line_spacing = spacing_cfg.get("line_spacing", 1.15)
 
         # Handle Code style specially
-        c_style = doc.styles["Code"] if "Code" in doc.styles else doc.styles.add_style('Code', 1)
+        c_style = doc.styles["Code"] if "Code" in doc.styles else doc.styles.add_style("Code", 1)
         self._set_font(c_style.font, "Courier New")
         c_style.font.size = Pt(code_cfg.get("font_size", 9))
         c_color = hex_to_rgb(code_cfg.get("text_color", "#2c3e50"))
         c_style.font.color.rgb = RGBColor(*c_color)
         c_bg = code_cfg.get("background_color", "#f8f9fa")
-        if c_bg and c_bg.lower() != '#ffffff':
-            shading_elm = OxmlElement('w:shd')
-            shading_elm.set(qn('w:fill'), c_bg.lstrip('#'))
+        if c_bg and c_bg.lower() != "#ffffff":
+            shading_elm = OxmlElement("w:shd")
+            shading_elm.set(qn("w:fill"), c_bg.lstrip("#"))
             c_style.paragraph_format.element.get_or_add_pPr().append(shading_elm)
         c_style.paragraph_format.left_indent = Pt(15)
         c_style.paragraph_format.space_before = Pt(8)
@@ -223,26 +223,92 @@ class DocxGenerator:
 
         # Heading styles from template or defaults
         heading_defaults = {
-            "Heading 1": {"key": "h1", "size": 28, "color": "#1A1A2E", "bold": True, "space_before": 18, "space_after": 12},
-            "Heading 2": {"key": "h2", "size": 24, "color": "#2C3E50", "bold": True, "space_before": 14, "space_after": 10},
-            "Heading 3": {"key": "h3", "size": 20, "color": "#34495E", "bold": True, "space_before": 12, "space_after": 8},
-            "Heading 4": {"key": "h4", "size": 16, "color": "#333333", "bold": True, "space_before": 10, "space_after": 6},
-            "Title":     {"key": "note_title", "size": 28, "color": "#1A1A2E", "bold": True, "space_before": 24, "space_after": 12},
-            "Subtitle":  {"key": "subject_name", "size": 18, "color": "#2C3E50", "bold": True, "space_before": 12, "space_after": 8},
-            "List Bullet": {"key": "list", "size": 11, "color": "#2C3E50", "bold": False, "space_before": 0, "space_after": 4},
-            "List Number": {"key": "list", "size": 11, "color": "#2C3E50", "bold": False, "space_before": 0, "space_after": 4},
+            "Heading 1": {
+                "key": "h1",
+                "size": 28,
+                "color": "#1A1A2E",
+                "bold": True,
+                "space_before": 18,
+                "space_after": 12,
+            },
+            "Heading 2": {
+                "key": "h2",
+                "size": 24,
+                "color": "#2C3E50",
+                "bold": True,
+                "space_before": 14,
+                "space_after": 10,
+            },
+            "Heading 3": {
+                "key": "h3",
+                "size": 20,
+                "color": "#34495E",
+                "bold": True,
+                "space_before": 12,
+                "space_after": 8,
+            },
+            "Heading 4": {
+                "key": "h4",
+                "size": 16,
+                "color": "#333333",
+                "bold": True,
+                "space_before": 10,
+                "space_after": 6,
+            },
+            "Title": {
+                "key": "note_title",
+                "size": 28,
+                "color": "#1A1A2E",
+                "bold": True,
+                "space_before": 24,
+                "space_after": 12,
+            },
+            "Subtitle": {
+                "key": "subject_name",
+                "size": 18,
+                "color": "#2C3E50",
+                "bold": True,
+                "space_before": 12,
+                "space_after": 8,
+            },
+            "List Bullet": {
+                "key": "list",
+                "size": 11,
+                "color": "#2C3E50",
+                "bold": False,
+                "space_before": 0,
+                "space_after": 4,
+            },
+            "List Number": {
+                "key": "list",
+                "size": 11,
+                "color": "#2C3E50",
+                "bold": False,
+                "space_before": 0,
+                "space_after": 4,
+            },
         }
-        
+
         # Add custom styles for GroupName if needed
         if "GroupName" not in doc.styles:
-            style = doc.styles.add_style('GroupName', 1) # 1 = PARAGRAPH
-            heading_defaults["GroupName"] = {"key": "group_name", "size": 12, "color": "#7f8c8d", "bold": False, "space_before": 4, "space_after": 8}
+            style = doc.styles.add_style("GroupName", 1)  # 1 = PARAGRAPH
+            heading_defaults["GroupName"] = {
+                "key": "group_name",
+                "size": 12,
+                "color": "#7f8c8d",
+                "bold": False,
+                "space_before": 4,
+                "space_after": 8,
+            }
 
         # Setup Alignment mapping helper function
         def _get_docx_alignment(align_str):
-            if align_str == 'center': return WD_ALIGN_PARAGRAPH.CENTER
-            if align_str == 'right': return WD_ALIGN_PARAGRAPH.RIGHT
-            if align_str == 'justify': return WD_ALIGN_PARAGRAPH.JUSTIFY
+            if align_str == "center":
+                return WD_ALIGN_PARAGRAPH.CENTER
+            if align_str == "right":
+                return WD_ALIGN_PARAGRAPH.RIGHT
+            if align_str == "justify":
+                return WD_ALIGN_PARAGRAPH.JUSTIFY
             return WD_ALIGN_PARAGRAPH.LEFT
 
         for style_name, defaults in heading_defaults.items():
@@ -254,54 +320,64 @@ class DocxGenerator:
                 h_color = hex_to_rgb(h_el.get("text_color", defaults["color"]))
                 h_style.font.color.rgb = RGBColor(*h_color)
                 h_style.font.bold = h_el.get("font_weight", "bold") == "bold"
-                
-                h_style.paragraph_format.space_before = Pt(h_el.get("margin_top", defaults["space_before"]))
-                h_style.paragraph_format.space_after = Pt(h_el.get("margin_bottom", defaults["space_after"]))
-                h_style.paragraph_format.alignment = _get_docx_alignment(h_el.get("alignment", "left"))
+
+                h_style.paragraph_format.space_before = Pt(
+                    h_el.get("margin_top", defaults["space_before"])
+                )
+                h_style.paragraph_format.space_after = Pt(
+                    h_el.get("margin_bottom", defaults["space_after"])
+                )
+                h_style.paragraph_format.alignment = _get_docx_alignment(
+                    h_el.get("alignment", "left")
+                )
                 h_style.paragraph_format.line_spacing = spacing_cfg.get("line_spacing", 1.15)
-                
+
                 # Apply background color (shading) if present
                 bg_color = h_el.get("background_color")
-                if bg_color and bg_color.lower() != '#ffffff':
-                    shading_elm = OxmlElement('w:shd')
-                    shading_elm.set(qn('w:fill'), bg_color.lstrip('#'))
+                if bg_color and bg_color.lower() != "#ffffff":
+                    shading_elm = OxmlElement("w:shd")
+                    shading_elm.set(qn("w:fill"), bg_color.lstrip("#"))
                     h_style.paragraph_format.element.get_or_add_pPr().append(shading_elm)
-                    
+
             except (KeyError, ValueError):
                 pass
 
     def _create_cover_page(self, doc: Document):
         """Create a cover page using template settings"""
-        tc = getattr(self, '_template_config', None) or {}
+        tc = getattr(self, "_template_config", None) or {}
         cover_cfg = tc.get("cover_page", {})
-        
+
         # Helper to parse hex color
         def hex_to_rgb(hex_str):
-            hex_str = hex_str.lstrip('#')
-            return tuple(int(hex_str[i:i+2], 16) for i in (0, 2, 4))
-            
+            hex_str = hex_str.lstrip("#")
+            return tuple(int(hex_str[i : i + 2], 16) for i in (0, 2, 4))
+
         # Vertical alignment via spacers
         v_align = cover_cfg.get("v_align", "middle")
         if v_align == "top":
             spacer_count = 1
         elif v_align == "middle":
             spacer_count = 8
-        else: # bottom
+        else:  # bottom
             spacer_count = 16
-            
+
         for _ in range(spacer_count):
             doc.add_paragraph("")
 
         # Horizontal alignment
         h_align_str = cover_cfg.get("h_align", "center")
+
         def _get_docx_alignment(align_str):
-            if align_str == 'center': return WD_ALIGN_PARAGRAPH.CENTER
-            if align_str == 'right': return WD_ALIGN_PARAGRAPH.RIGHT
+            if align_str == "center":
+                return WD_ALIGN_PARAGRAPH.CENTER
+            if align_str == "right":
+                return WD_ALIGN_PARAGRAPH.RIGHT
             return WD_ALIGN_PARAGRAPH.LEFT
+
         h_align = _get_docx_alignment(h_align_str)
 
         # Title
-        title_text = cover_cfg.get("h1_text") or self.lecture_title
+        title_text = cover_cfg.get("h1_text") or self.note_title
         title_para = doc.add_paragraph()
         title_para.alignment = h_align
         run = title_para.add_run(title_text)
@@ -334,11 +410,11 @@ class DocxGenerator:
         # Page break after cover
         doc.add_page_break()
 
-    def _create_toc_placeholder(self, doc: Document, content_segments: List[ContentSegment]):
+    def _create_toc_placeholder(self, doc: Document, content_segments: list[ContentSegment]):
         """Create a table of contents section"""
-        tc = getattr(self, '_template_config', None) or {}
+        tc = getattr(self, "_template_config", None) or {}
         font_family = tc.get("font_family", "Instrument Sans")
-        
+
         toc_heading = doc.add_paragraph()
         run = toc_heading.add_run("Table of Contents")
         run.font.size = Pt(16)
@@ -370,39 +446,41 @@ class DocxGenerator:
         - Strip and replace list prefix chars with proper bullet / number
         """
         content = segment.content
-        tc = getattr(self, '_template_config', None) or {}
+        tc = getattr(self, "_template_config", None) or {}
         list_cfg = tc.get("list_config", {})
         custom_bullet = list_cfg.get("custom_bullet", "•")
         num_format = list_cfg.get("number_format", "1.")
 
         if style_name == "List Bullet":
             # Strip leading markdown list markers (-, *, +, •) and replace with custom_bullet
-            content = re.sub(r'^\s*[-*+•]\s+', '', content)
-            content = f'{custom_bullet}  {content}'
+            content = re.sub(r"^\s*[-*+•]\s+", "", content)
+            content = f"{custom_bullet}  {content}"
         elif style_name == "List Number":
             # Strip leading "1." / "2." etc. and replace with the configured format
-            m = re.match(r'^\s*(\d+)\.\s+', content)
+            m = re.match(r"^\s*(\d+)\.\s+", content)
             if m:
                 num = m.group(1)
-                content = re.sub(r'^\s*\d+\.\s+', '', content)
-                
+                content = re.sub(r"^\s*\d+\.\s+", "", content)
+
                 # Apply number format
                 prefix = f"{num}."
-                if num_format == "1)": prefix = f"{num})"
-                elif num_format == "1]": prefix = f"{num}]"
-                
-                content = f'{prefix}  {content}'
+                if num_format == "1)":
+                    prefix = f"{num})"
+                elif num_format == "1]":
+                    prefix = f"{num}]"
+
+                content = f"{prefix}  {content}"
 
         return content
 
     def _create_content(
         self,
         doc: Document,
-        content_segments: List[ContentSegment],
-        extracted_images: List[ExtractedImage],
+        content_segments: list[ContentSegment],
+        extracted_images: list[ExtractedImage],
     ):
         """Create main content using template styles"""
-        tc = getattr(self, '_template_config', None) or {}
+        getattr(self, "_template_config", None) or {}
         # Image lookup by page
         images_by_page = {}
         for img in extracted_images:
@@ -413,11 +491,14 @@ class DocxGenerator:
         i = 0
         while i < len(content_segments):
             segment = content_segments[i]
-            
+
             # Check if this is a table row - collect all consecutive table rows
             if segment.content_type == ContentType.TABLE_ROW:
                 table_segments = []
-                while i < len(content_segments) and content_segments[i].content_type == ContentType.TABLE_ROW:
+                while (
+                    i < len(content_segments)
+                    and content_segments[i].content_type == ContentType.TABLE_ROW
+                ):
                     table_segments.append(content_segments[i])
                     i += 1
                 self._render_table(doc, table_segments)
@@ -457,63 +538,77 @@ class DocxGenerator:
                 for img in images_by_page[segment.page_number]:
                     self._add_image(doc, img)
                 del images_by_page[segment.page_number]
-            
+
             i += 1
 
-    def _render_table(self, doc: Document, table_segments: List[ContentSegment]):
+    def _render_table(self, doc: Document, table_segments: list[ContentSegment]):
         """Render a table in DOCX using template settings"""
-        if not table_segments: return
-        
+        if not table_segments:
+            return
+
         # Parse rows
         rows_data = []
         for s in table_segments:
             # Simple markdown table parser
-            cells = [c.strip() for c in s.content.split("|") if c.strip() and not c.strip().startswith("---")]
-            if cells: rows_data.append(cells)
-        if not rows_data: return
+            cells = [
+                c.strip()
+                for c in s.content.split("|")
+                if c.strip() and not c.strip().startswith("---")
+            ]
+            if cells:
+                rows_data.append(cells)
+        if not rows_data:
+            return
 
-        tc = getattr(self, '_template_config', None) or {}
+        tc = getattr(self, "_template_config", None) or {}
         tbl_cfg = tc.get("table", {})
-        
+
         # Table settings
         header_fs = tbl_cfg.get("header_font_size", 10)
         body_fs = tbl_cfg.get("body_font_size", 9)
         align_str = tbl_cfg.get("alignment", "left").lower()
-        
+
         hdr_bg = tbl_cfg.get("header_bg_color", "#593f8f")
         hdr_fg = tbl_cfg.get("header_text_color", "#ffffff")
         odd_bg = tbl_cfg.get("odd_row_color", "#ffffff")
         even_bg = tbl_cfg.get("even_row_color", "#f5f4fb")
-        
+
         def _get_docx_alignment(a_str):
-            if a_str == 'center': return WD_ALIGN_PARAGRAPH.CENTER
-            if a_str == 'right': return WD_ALIGN_PARAGRAPH.RIGHT
+            if a_str == "center":
+                return WD_ALIGN_PARAGRAPH.CENTER
+            if a_str == "right":
+                return WD_ALIGN_PARAGRAPH.RIGHT
             return WD_ALIGN_PARAGRAPH.LEFT
+
         h_align = _get_docx_alignment(align_str)
 
         table = doc.add_table(rows=len(rows_data), cols=len(rows_data[0]))
-        table.style = 'Table Grid'
-        
+        table.style = "Table Grid"
+
         # Helper to parse hex color to RGBColor
         def hex_to_rgb_obj(hex_str):
-            if not hex_str: return RGBColor(0, 0, 0)
-            hex_str = hex_str.lstrip('#')
+            if not hex_str:
+                return RGBColor(0, 0, 0)
+            hex_str = hex_str.lstrip("#")
             return RGBColor(int(hex_str[0:2], 16), int(hex_str[2:4], 16), int(hex_str[4:6], 16))
 
         for r_idx, row in enumerate(rows_data):
             for c_idx, cell_text in enumerate(row):
-                if c_idx >= len(table.columns): continue
+                if c_idx >= len(table.columns):
+                    continue
                 cell = table.cell(r_idx, c_idx)
-                
+
                 # Background color
                 if r_idx == 0:
                     self._set_cell_background(cell, hdr_bg)
-                elif r_idx % 2 == 0: # Even row (0-indexed, so 2nd row of data is index 1, which is odd...)
-                    # Wait, r_idx 0 is header. 
+                elif (
+                    r_idx % 2 == 0
+                ):  # Even row (0-indexed, so 2nd row of data is index 1, which is odd...)
+                    # Wait, r_idx 0 is header.
                     # Row 1 (data row 1) is odd.
                     # Row 2 (data row 2) is even.
                     self._set_cell_background(cell, even_bg)
-                else: # Odd row
+                else:  # Odd row
                     self._set_cell_background(cell, odd_bg)
 
                 # Set text and formatting
@@ -522,11 +617,11 @@ class DocxGenerator:
                 run = para.add_run(cell_text)
                 run.font.size = Pt(header_fs if r_idx == 0 else body_fs)
                 self._set_font(run.font, tc.get("font_family", "Instrument Sans"))
-                
+
                 if r_idx == 0:
                     run.bold = True
                     run.font.color.rgb = hex_to_rgb_obj(hdr_fg)
-                
+
         doc.add_paragraph("")
 
     def _add_image(self, doc: Document, image_obj: ExtractedImage):
@@ -556,12 +651,13 @@ class DocxGenerator:
 
     def _create_footer(self, doc: Document):
         """Add branded footer to all sections using template settings"""
-        tc = getattr(self, '_template_config', None) or {}
+        tc = getattr(self, "_template_config", None) or {}
         footer_cfg = tc.get("footer", {})
-        
+
         custom_text = footer_cfg.get("custom_text", "")
-        parts = ["Generated by mysmartnotes.vercel.app | Create notes and study smart!"]
-        if custom_text: parts.append(custom_text)
+        parts = ["Generated by velonote.vercel.app | Create notes and study smart!"]
+        if custom_text:
+            parts.append(custom_text)
         footer_text = " | ".join(parts)
 
         for section in doc.sections:
@@ -569,7 +665,7 @@ class DocxGenerator:
             footer.is_linked_to_previous = False
             footer_para = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
             footer_para.text = ""
-            
+
             # Note: Automatic page numbering in DOCX footer is complex via python-docx.
             # We will just use the text for now.
             run = footer_para.add_run(footer_text)

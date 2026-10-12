@@ -1,0 +1,26 @@
+# Gitleaks configuration
+# https://github.com/gitleaks/gitleaks/blob/master/config/gitleaks.toml
+
+title = "velonote Gitleaks Config"
+
+[extend]
+# Extend the default ruleset
+useDefault = true
+
+[[allowlists]]
+description = "CI stub placeholder values in workflow files — not real secrets"
+paths = [
+  '''.github/workflows/.*\.yml''',
+]
+regexes = [
+  '''ci-placeholder-not-a-real''',
+]
+
+[[allowlists]]
+description = "Example / template files — values are documentation placeholders"
+paths = [
+  '''.*\.example''',
+  '''.*\.example\..*''',
+  '''secrets\.env\.example''',
+  '''config/app\.config\.example\.json''',
+]

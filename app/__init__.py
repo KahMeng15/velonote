@@ -1,1 +1,1 @@
-"""MySmartNotes App"""
+"""VeloNote App"""

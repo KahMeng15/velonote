@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 
+
 class DashboardSummary(BaseModel):
     total_subjects: int
     total_notes: int

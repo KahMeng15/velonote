@@ -1,6 +1,6 @@
 # Resource Requirements & Sizing Guide
 
-MySmartNotes is designed to be efficient, but its multi-container architecture and AI components have specific resource needs. This guide helps you size your deployment based on expected usage.
+velonote is designed to be efficient, but its multi-container architecture and AI components have specific resource needs. This guide helps you size your deployment based on expected usage.
 
 ## 💻 Hardware Requirements
 
@@ -57,7 +57,7 @@ The `all-MiniLM-L6-v2` model is used for semantic search, running on the **Worke
 
 ## 💾 Storage Management
 
-MySmartNotes stores data in several locations, all of which should be persisted via Docker volumes:
+velonote stores data in several locations, all of which should be persisted via Docker volumes:
 1. **PostgreSQL Data**: Stored in `./data/postgres`. This grows with notes, chat history, and vector embeddings.
 2. **Original Uploads**: Stored in `./data/uploads`. This is the primary driver of storage usage.
 3. **Generated Materials**: Stored in `./data/generated`. Contains AI-generated study aids and version snapshots.

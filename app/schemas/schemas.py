@@ -1,9 +1,9 @@
 """Request/Response schemas"""
-from pydantic import BaseModel, EmailStr, Field, field_validator
-from datetime import datetime
-from typing import Optional, List, Any, Annotated
-import re
 
+from datetime import datetime
+from typing import Annotated, Any
+
+from pydantic import BaseModel, EmailStr, Field
 
 # Constants for validation
 NICKNAME_REGEX = r"^[a-zA-Z0-9_-]+$"
@@ -16,17 +16,17 @@ FullNameStr = Annotated[str, Field(min_length=2, max_length=100, pattern=FULL_NA
 
 # ========== User Schemas ==========
 class UserBase(BaseModel):
-    username: Optional[str] = None
-    email: Optional[EmailStr] = None
-    full_name: Optional[FullNameStr] = None
-    nickname: Optional[NicknameStr] = None
+    username: str | None = None
+    email: EmailStr | None = None
+    full_name: FullNameStr | None = None
+    nickname: NicknameStr | None = None
 
 
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
     nickname: NicknameStr
-    full_name: Optional[FullNameStr] = None
+    full_name: FullNameStr | None = None
     agree_tos: bool = False
     agree_privacy: bool = False
     agree_fair_use: bool = False
@@ -38,29 +38,49 @@ class UserLogin(BaseModel):
 
 
 class UserUpdate(BaseModel):
-    full_name: Optional[FullNameStr] = None
-    nickname: Optional[NicknameStr] = None
-    ai_provider: Optional[str] = None
-    ai_model: Optional[str] = None
-    ai_base_url: Optional[str] = None
-    ai_api_key: Optional[str] = None # Ignored by backend, but accepted from frontend
-    use_global_ai_config: Optional[bool] = None
+    full_name: FullNameStr | None = None
+    nickname: NicknameStr | None = None
+    ai_provider: str | None = None
+    ai_model: str | None = None
+    ai_base_url: str | None = None
+    ai_api_key: str | None = None  # Ignored by backend, but accepted from frontend
+    use_global_ai_config: bool | None = None
+    nav_sidebar_open: bool | None = None
+    action_sidebar_open: bool | None = None
+    sort_preference: str | None = None
+    last_chat_context: str | None = None
+    last_chat_ai_mode: str | None = None
+    last_chat_output_format: str | None = None
+    conv_response_mode: str | None = None
+    conv_input_mode: str | None = None
+    conv_transcription_enabled: bool | None = None
+    conv_grading_mode: str | None = None
 
 
 class User(UserBase):
     id: int
-    is_active: Optional[bool] = True
+    is_active: bool | None = True
     is_admin: bool = False
     is_approved: bool = True
     is_verified: bool = False
     tier: str = "free"
     ai_provider: str = "gemini"
-    ai_model: Optional[str] = None
-    ai_base_url: Optional[str] = None
+    ai_model: str | None = None
+    ai_base_url: str | None = None
     ai_api_key_configured: bool = False
     use_global_ai_config: bool = True
-    created_at: Optional[datetime] = None
-    
+    nav_sidebar_open: bool = True
+    action_sidebar_open: bool = True
+    sort_preference: str = "name_asc"
+    last_chat_context: str = "global"
+    last_chat_ai_mode: str = "elaborate"
+    last_chat_output_format: str = "sentence"
+    conv_response_mode: str = "voice"
+    conv_input_mode: str = "push"
+    conv_transcription_enabled: bool = True
+    conv_grading_mode: str = "lenient"
+    created_at: datetime | None = None
+
     class Config:
         from_attributes = True
 
@@ -73,22 +93,26 @@ class TokenResponse(BaseModel):
 
 # ========== Subject Schemas ==========
 
+
 # ========== Subject Group Schemas ==========
 class SubjectGroupBase(BaseModel):
     name: str
 
+
 class SubjectGroupCreate(SubjectGroupBase):
     pass
 
+
 class SubjectGroupUpdate(BaseModel):
-    name: Optional[str] = None
+    name: str | None = None
+
 
 class SubjectGroup(SubjectGroupBase):
     id: str
     user_id: int
     created_at: datetime
     updated_at: datetime
-    
+
     class Config:
         from_attributes = True
 
@@ -96,9 +120,9 @@ class SubjectGroup(SubjectGroupBase):
 # ========== Subject Schemas ==========
 class SubjectBase(BaseModel):
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     color: str = "#3b82f6"
-    group_id: Optional[str] = None
+    group_id: str | None = None
 
 
 class SubjectCreate(SubjectBase):
@@ -106,41 +130,47 @@ class SubjectCreate(SubjectBase):
 
 
 class SubjectUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    color: Optional[str] = None
-    group_id: Optional[str] = None
+    name: str | None = None
+    description: str | None = None
+    color: str | None = None
+    group_id: str | None = None
 
 
 class Subject(SubjectBase):
     id: str
     user_id: int
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 
 
 class SubjectResponse(Subject):
     """Response schema for subject endpoints"""
-    group: Optional[SubjectGroup] = None
+
+    group: SubjectGroup | None = None
 
 
 class SubjectGroupResponse(SubjectGroup):
-    subjects: List[SubjectResponse] = []
+    subjects: list[SubjectResponse] = []
 
 
-# ========== Lecture Schemas ==========
-class LectureBase(BaseModel):
+# ========== Resource Schemas ==========
+class ResourceBase(BaseModel):
     title: str
     subject_id: str
 
 
-class LectureCreate(LectureBase):
+class ResourceCreate(ResourceBase):
     pass
 
 
-class Lecture(LectureBase):
+class ResourceUpdate(BaseModel):
+    title: str | None = None
+    subject_id: str | None = None
+
+
+class Resource(ResourceBase):
     id: str
     file_path: str
     file_type: str
@@ -148,57 +178,59 @@ class Lecture(LectureBase):
     file_name: str
     user_id: int
     page_count: int = 0
-    extracted_text: Optional[str] = None
-    extracted_content_structured: Optional[str] = None
-    extracted_images_metadata: Optional[str] = None
-    output_pdf_path: Optional[str] = None
-    processing_time_ms: Optional[int] = None
+    extracted_text: str | None = None
+    extracted_content_structured: str | None = None
+    extracted_images_metadata: str | None = None
+    output_pdf_path: str | None = None
+    processing_time_ms: int | None = None
+    timings: dict | None = None
     created_at: datetime
     updated_at: datetime
-    
+
     class Config:
         from_attributes = True
 
 
-class LectureResponse(Lecture):
-    """Response schema for lecture endpoints"""
-    subject: Optional[SubjectResponse] = None
+class ResourceResponse(Resource):
+    """Response schema for resource endpoints"""
+
+    subject: SubjectResponse | None = None
 
 
-# ========== Auth Schemas ==========
-class SummaryBase(BaseModel):
+# ========== Note Schemas ==========
+class NoteBase(BaseModel):
     title: str
     summary_type: str
 
 
-class Summary(SummaryBase):
-    id: int
-    lecture_id: str
+class Note(NoteBase):
+    id: str
+    resource_id: str
     file_path: str
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 
 
 # ========== Study Session Schemas ==========
 class StudySessionCreate(BaseModel):
-    lecture_id: Optional[str] = None
+    resource_id: str | None = None
     session_type: str
     duration_minutes: int
     questions_attempted: int = 0
     questions_correct: int = 0
-    score: Optional[float] = None
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
-    status: Optional[str] = "completed"
+    score: float | None = None
+    start_time: datetime | None = None
+    end_time: datetime | None = None
+    status: str | None = "completed"
 
 
 class StudySession(StudySessionCreate):
     id: int
     user_id: int
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 
@@ -210,60 +242,83 @@ class TaskResponse(BaseModel):
     status: str
     created_at: datetime
     updated_at: datetime
-    result: Optional[str] = None
-    error_message: Optional[str] = None
-    
+    result: str | None = None
+    error_message: str | None = None
+
     class Config:
         from_attributes = True
 
 
 # ========== Chat Schemas ==========
 class ChatMessage(BaseModel):
-    lecture_id: str
+    resource_id: str
     message: str
 
 
 class ChatResponse(BaseModel):
     message: str
     response: str
-    sources: Optional[List[str]] = None
+    sources: list[str] | None = None
 
 
-# ========== Note Snapshot Schemas ==========
-class NoteSnapshotCreate(BaseModel):
+# ========== Resource Snapshot Schemas ==========
+class ResourceSnapshotCreate(BaseModel):
     name: str
     content: str
 
 
-class NoteSnapshotResponse(BaseModel):
+class ResourceSnapshotResponse(BaseModel):
     id: int
-    lecture_id: str
+    resource_id: str
     user_id: int
     name: str
     content: str
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 
 
-# ========== Lecture Content Update ==========
-class LectureContentUpdate(BaseModel):
+# ========== Resource Content Update ==========
+class ResourceContentUpdate(BaseModel):
     extracted_text: str
 
 
 # ========== Export Template Schemas ==========
 class TemplateCreate(BaseModel):
     name: str
-    description: Optional[str] = None
-    config: Optional[Any] = None
+    description: str | None = None
+    config: Any | None = None
 
 
 class TemplateDuplicate(BaseModel):
-    name: Optional[str] = None
+    name: str | None = None
 
 
 class TemplateUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    config: Optional[Any] = None
+    name: str | None = None
+    description: str | None = None
+    config: Any | None = None
+
+
+# ========== User Prompt Schemas ==========
+class UserPromptCreate(BaseModel):
+    name: str
+    content: str
+
+
+class UserPromptUpdate(BaseModel):
+    name: str | None = None
+    content: str | None = None
+
+
+class UserPromptResponse(BaseModel):
+    id: int
+    user_id: int
+    name: str
+    content: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True

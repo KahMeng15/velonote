@@ -1,21 +1,41 @@
 #!/bin/bash
 
-# MySmartNotes Local Development Script
-# This starts both the API and the Worker in parallel.
+# velonote Local Development Script
+# Run locally bare-metal or pass --docker to launch full containerized stack.
+
+if [ "$1" = "--docker" ] || [ "$1" = "-d" ]; then
+    shift
+    echo "Starting velonote dev containers with file watchers..."
+    exec docker compose -f docker-compose.dev.yml up "$@"
+fi
 
 # 1. Ensure logs directory exists
 mkdir -p logs
 
-# 2. Start the Background Worker in the background
+# 2. Ensure Database is running
+if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -q "velonote_db"; then
+    echo "Starting Database container in background..."
+    docker compose -f docker-compose.dev.yml up -d db
+fi
+
+# 3. Start the Background Worker in the background
 echo "Starting Background Worker..."
-# Kill any existing zombie workers first
-pkill -f "python3 -m app.worker_main" || true
+# Kill any existing zombie workers and frontend servers first
+pkill -f "python3 -m app.worker_main" 2>/dev/null || true
+pkill -f "vite" 2>/dev/null || true
+
 python3 -m app.worker_main > logs/worker_stdout.log 2>&1 &
 WORKER_PID=$!
 
-# 3. Start the API Server
+# 3. Start the React Frontend Dev Server in the background
+echo "Starting React Frontend on http://localhost:5173..."
+(cd frontend && npm run dev > ../logs/frontend_stdout.log 2>&1) &
+FRONTEND_PID=$!
+
+
+# Cleanup on exit (Must be defined before blocking commands)
+trap "kill $WORKER_PID $FRONTEND_PID 2>/dev/null; pkill -f 'vite' 2>/dev/null; exit" SIGINT SIGTERM EXIT
+
+# 4. Start the API Server (blocking)
 echo "Starting API Server on http://localhost:8000..."
 python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-
-# Cleanup on exit
-trap "kill $WORKER_PID; exit" SIGINT SIGTERM

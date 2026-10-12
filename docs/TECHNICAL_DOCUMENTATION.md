@@ -1,7 +1,7 @@
-# MySmartNotes Technical Documentation
+# velonote Technical Documentation
 
 ## 1. Introduction
-MySmartNotes is an AI-powered study companion designed to convert lecture materials (PDF, PPTX, images) into structured, searchable, and interactive study notes. It provides students and small study groups with tools for semantic Q&A, quiz generation, and progress tracking.
+velonote is an AI-powered study companion designed to convert lecture materials (PDF, PPTX, images) into structured, searchable, and interactive study notes. It provides students and small study groups with tools for semantic Q&A, quiz generation, and progress tracking.
 
 The project is built with a focus on **scalability, reliability, and privacy**, using a **multi-container architecture** to separate API concerns from resource-intensive background processing.
 
@@ -9,7 +9,7 @@ The project is built with a focus on **scalability, reliability, and privacy**, 
 
 ## 2. Architecture & Tech Stack
 
-MySmartNotes follows a modular, multi-service architecture designed for reliable performance.
+velonote follows a modular, multi-service architecture designed for reliable performance.
 
 ### 2.1 Services
 - **Frontend (Nginx)**: Serves static assets and acts as a reverse proxy for the API.
@@ -26,9 +26,12 @@ MySmartNotes follows a modular, multi-service architecture designed for reliable
 - **AI Integration**: Custom `AIClient` supporting Google Gemini, Hugging Face Inference API, and local Ollama.
 
 ### 2.3 Frontend
-- **Framework**: Vanilla JavaScript, HTML5, and CSS3.
-- **Build System**: Zero-build (no npm/webpack required).
-- **Markdown Rendering**: `marked.js` on the client-side.
+- **Framework**: React 19 + Vite + Mantine UI 9.
+- **Routing**: `react-router-dom` for client-side routing.
+- **Markdown Rendering**: `react-markdown` with `remark-gfm` + `rehype-raw`.
+- **Rich Text**: TipTap editor (Mantine integration) with table support.
+- **Icons**: `@tabler/icons-react`.
+- **Build System**: Vite dev server (hot-reload) at `localhost:5173`, proxies `/api` → API.
 - **Real-time Updates**: WebSockets for live processing progress.
 
 ---
@@ -61,18 +64,24 @@ The database consists of several key entities managed via SQLAlchemy:
 
 ## 4. Core Workflows
 
-### 4.1 Document Processing Pipeline (`SmartPipeline`)
-The extraction pipeline is designed to preserve the semantic structure of lecture slides.
+### 4.1 Document Processing Pipeline (`UnifiedContentProcessor`)
+The new unified pipeline replaces the legacy `SmartPipeline` and provides a single entry point for all supported document types (PDF, PPTX, DOCX, images). It automatically detects scanned PDFs and routes them through the appropriate OCR workflow, while also handling native documents with font‑aware heading detection and table extraction.
 
-1. **Submission**: When a user uploads a file, the API creates an `ocr` task in the database.
-2. **Extraction**:
-   - **PDF**: Uses `pdfplumber` for table extraction and a custom `FontAwareExtractor` to detect headings.
-   - **PPTX**: Uses `python-pptx` to extract text from shapes.
-3. **Worker Processing**: The Worker picks up the task, performs the extraction, and updates the task status.
-4. **AI Polish**: (Optional) Refines formatting and ensures logical consistency.
+1. **Submission**: User uploads a file → API creates a `process_resource` or `process_exercise` task in the `Task` table.
+2. **Unified Extraction** (`UnifiedContentProcessor.extract()`):
+   - Detects document type and whether it is scanned.
+   - **PDF**: Uses `pdfplumber` for tables, `FontAwareExtractor` for headings, and `ImageExtractorV2` for images.
+   - **PPTX**: Extracts text via `python-pptx` and images via `ImageExtractorV2`.
+   - **DOCX**: Parses text with `python-docx` and extracts inline images.
+   - **Images**: Directly processed as single‑page documents.
+   - Scanned PDFs are handed to `ScannedDocHandler` → Tesseract OCR with `ImagePreprocessor`.
+   - Extracted images are filtered by `ImageClassifier` and positioned inline by `ImageTextMapper`.
+3. **Worker Processing**: The worker executes the unified extraction, generates embeddings, and stores a `ContentBundle` (markdown, images, metadata).
+4. **AI Polish (Optional)**: The `AIClient` may be invoked to improve formatting, consistency, and add reasoning layers.
+5. **Result**: Clean markdown plus extracted assets are saved for downstream features (RAG, quizzes, exports).
 
 ### 4.2 Semantic Search & RAG
-MySmartNotes implements a "Zero-Config RAG" system:
+velonote implements a "Zero-Config RAG" system:
 
 1. **Chunking**: Extracted text is split into ~500-character chunks.
 2. **Embedding**: Chunks are converted into 384-dimensional vectors using `sentence-transformers` on the Worker.
@@ -127,11 +136,10 @@ The middleware logic in `app/main.py` coordinates robust safety controls:
 │   ├── models/             # SQLAlchemy DB models
 │   ├── processing/         # Core extraction & AI logic
 │   ├── routers/            # FastAPI API endpoints
-│   ├── static/             # Frontend assets (HTML, JS, CSS)
 │   ├── utils/              # Utilities (Auth, Tasks, DB)
 │   ├── main.py             # API entry point
-│   ├── worker_main.py      # Background worker entry point
-│   └── nginx.conf          # Nginx configuration
+│   └── worker_main.py      # Background worker entry point
+├── frontend/               # React + Vite + Mantine UI
 ├── data/                   # Persistent storage (Postgres/Uploads)
 ├── docs/                   # Documentation files
 ├── logs/                   # Centralized logging directory

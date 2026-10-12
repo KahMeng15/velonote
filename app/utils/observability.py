@@ -3,10 +3,11 @@
 These counters are intentionally simple and dependency-free. They provide
 an immediate operational view for admins without requiring Prometheus.
 """
+
 from collections import defaultdict
 from threading import Lock
 from time import time
-from typing import Dict, Any
+from typing import Any
 
 _started_at = time()
 _lock = Lock()
@@ -28,8 +29,8 @@ def record_request(path: str, status_code: int, duration_ms: int) -> None:
         bucket = path
         if path.startswith("/note/"):
             bucket = "/note/{id}"
-        elif path.startswith("/lectures/"):
-            bucket = "/lectures/{id}"
+        elif path.startswith("/notes/"):
+            bucket = "/notes/{id}"
         elif path.startswith("/chat/"):
             bucket = "/chat/*"
 
@@ -39,7 +40,7 @@ def record_request(path: str, status_code: int, duration_ms: int) -> None:
             _errors_total += 1
 
 
-def get_runtime_metrics_snapshot() -> Dict[str, Any]:
+def get_runtime_metrics_snapshot() -> dict[str, Any]:
     with _lock:
         avg_duration = (_duration_ms_sum / _requests_total) if _requests_total else 0.0
         uptime_seconds = int(time() - _started_at)
@@ -49,5 +50,7 @@ def get_runtime_metrics_snapshot() -> Dict[str, Any]:
             "errors_total": _errors_total,
             "avg_request_duration_ms": round(avg_duration, 2),
             "status_counts": dict(_status_counts),
-            "top_paths": dict(sorted(_path_counts.items(), key=lambda item: item[1], reverse=True)[:20]),
+            "top_paths": dict(
+                sorted(_path_counts.items(), key=lambda item: item[1], reverse=True)[:20]
+            ),
         }

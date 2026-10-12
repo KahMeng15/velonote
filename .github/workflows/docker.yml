@@ -1,42 +1,173 @@
-name: Build and Push to GHCR (dev + prod)
+name: Build and Push to GHCR
 
 on:
   push:
-    branches: [ "main", "dev" ]
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
 
 permissions:
   contents: read
   packages: write
 
 jobs:
-  build:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Validate docker-compose files before doing anything expensive
+  # ─────────────────────────────────────────────────────────────────────────────
+  validate-compose:
+    name: Validate Docker Compose
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create stub env files (compose validation only — no real secrets)
+        run: |
+          # Stub .env — matches what operators provide (no secrets here)
+          cat > .env << 'EOF'
+          DB_USER=velonote
+          DB_HOST=db
+          DB_PORT=5432
+          DB_NAME=velonote
+          REDIS_URL=redis://redis:6379/0
+          HOST=0.0.0.0
+          API_PORT=8000
+          PUBLIC_PORT=8000
+          ADMIN_EMAIL=
+          SMTP_HOST=
+          SMTP_PORT=587
+          SMTP_USER=
+          SMTP_PASSWORD=
+          SMTP_SENDER_NAME=velonote
+          SMTP_TLS=True
+          FIREBASE_API_KEY=
+          FIREBASE_AUTH_DOMAIN=
+          FIREBASE_PROJECT_ID=
+          FIREBASE_STORAGE_BUCKET=
+          FIREBASE_MESSAGING_SENDER_ID=
+          FIREBASE_APP_ID=
+          FIREBASE_MEASUREMENT_ID=
+          EOF
+
+          # Stub secrets.env — values are obviously fake CI placeholders
+          cat > secrets.env << 'EOF'
+          DB_PASSWORD=ci-placeholder-not-a-real-password
+          SECRET_KEY=ci-placeholder-not-a-real-jwt-signing-key
+          APP_ENCRYPTION_KEY=ci-placeholder-not-a-real-fernet-key
+          EOF
+
+      - name: Validate docker-compose.yml
+        run: docker compose -f docker-compose.yml config --quiet
+
+      - name: Validate docker-compose.dev.yml
+        run: docker compose -f docker-compose.dev.yml config --quiet
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Build and push Docker image
+  # ─────────────────────────────────────────────────────────────────────────────
+  build-and-push:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    needs: validate-compose
+    # Only push on actual pushes (not PRs)
+    if: github.event_name == 'push'
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU (multi-arch support)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Decide tag (dev or latest)
+      - name: Compute image tags and labels
         id: meta
-        run: |
-          if [ "${GITHUB_REF_NAME}" = "main" ]; then
-            echo "tag=latest" >> $GITHUB_OUTPUT
-          else
-            echo "tag=dev" >> $GITHUB_OUTPUT
-          fi
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/kahmeng15/velonote
+          tags: |
+            # branch=main → :latest
+            type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
+            # always tag with short SHA for traceability
+            type=sha,prefix=,format=short
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v7
+      - name: Build and push
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64
+          # Layer caching via GitHub Actions cache backend
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Compute nginx image tags
+        id: meta-nginx
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/kahmeng15/velonote
           tags: |
-            ghcr.io/kahmeng15/mysmartnotes:${{ steps.meta.outputs.tag }}
-            ghcr.io/kahmeng15/mysmartnotes:${{ github.sha }}
+            type=raw,value=nginx-latest,enable=${{ github.ref_name == 'main' }}
+            type=sha,prefix=nginx-,format=short
+
+      - name: Build and push nginx
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: app/Dockerfile.nginx
+          push: true
+          tags: ${{ steps.meta-nginx.outputs.tags }}
+          labels: ${{ steps.meta-nginx.outputs.labels }}
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Scan the pushed image for vulnerabilities
+  # ─────────────────────────────────────────────────────────────────────────────
+  scan-image:
+    name: Scan Docker Image (Trivy)
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      security-events: write   # needed to upload SARIF to GitHub Security tab
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine image tag
+        id: tag
+        run: echo "image=ghcr.io/kahmeng15/velonote:latest" >> $GITHUB_OUTPUT
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Trivy image scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.tag.outputs.image }}
+          format: sarif
+          output: trivy-image.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      - name: Upload image scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-image.sarif
+          category: trivy-image

@@ -1,4 +1,4 @@
-# MySmartNotes – Copilot Instructions
+# velonote – Copilot Instructions
 
 ## Architecture Overview
 

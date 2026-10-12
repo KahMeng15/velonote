@@ -1,12 +1,12 @@
-# MySmartNotes - AI-Powered Study Companion
+# velonote - AI-Powered Study Companion
 
 ## 📖 Project Overview
-MySmartNotes is a multi-container web application designed to convert lecture materials (PDF, PPTX, images) into structured, AI-enhanced study notes. It utilizes a sophisticated processing pipeline to extract clean markdown, which then enables features like RAG-based chat, quiz generation, and progress tracking.
+velonote is a multi-container web application designed to convert lecture materials (PDF, PPTX, images) into structured, AI-enhanced study notes. It utilizes a sophisticated processing pipeline to extract clean markdown, which then enables features like RAG-based chat, quiz generation, and progress tracking.
 
 ### Architecture & Tech Stack
 - **Backend**: FastAPI (Python 3.11+)
 - **Worker**: Dedicated Python process for background tasks (OCR, AI, Embeddings).
-- **Frontend**: Vanilla JavaScript/HTML/CSS, served via **Nginx** (which also acts as a reverse proxy).
+- **Frontend**: React (Vite), styled with Mantine UI.
 - **Database**: **PostgreSQL 15** (managed via SQLAlchemy ORM).
 - **AI/LLM**: Supports Google Gemini (default), Hugging Face, and Ollama.
 - **Vector Search**: Local embeddings (`sentence-transformers/all-MiniLM-L6-v2`) stored in PostgreSQL.
@@ -17,8 +17,8 @@ MySmartNotes is a multi-container web application designed to convert lecture ma
 ### Development Environment (Local)
 To run the project locally for development with hot-reloading:
 ```bash
-# 1. Start Infrastructure (Database + Redis)
-docker-compose up -d db redis
+# 1. Start Infrastructure (Database)
+docker-compose up -d db
 
 # 2. Setup virtual environment
 python -m venv venv
@@ -27,10 +27,12 @@ pip install -r requirements.txt
 
 # 3. Configure environment
 cp .env.example .env
-# Edit .env to add your API keys and set DATABASE_URL=postgresql://mysmartnotes:mysmartnotespassword@localhost:5432/mysmartnotes
+# Edit .env to add your API keys. Do NOT set DATABASE_URL — it's auto-constructed from DB_USER/PASSWORD/HOST/PORT/NAME.
 
-# 4. Run API and Worker
-./scripts/dev.sh
+# 4. Run API, Worker, and Frontend (Local or Containerized)
+./scripts/dev.sh              # Local (Python + Node on host)
+# OR Run full containerized dev stack with file watchers:
+docker compose -f docker-compose.dev.yml up
 ```
 
 ### Docker Deployment
@@ -42,12 +44,9 @@ docker-compose up -d --build
 - **API Docs**: `http://localhost:8000/docs`
 
 ### Testing
+No Python test suite exists. Offline extraction test:
 ```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=app tests/
+python scripts/ProcessingAlgorithmTest/run_smart.py
 ```
 
 ## 🛠️ Development Conventions
@@ -69,7 +68,7 @@ Tasks (OCR, AI generation, Embeddings) are managed via a database-backed queue. 
 - **IP Filtering & Lockdown Mode**: Configurable via the admin dashboard and `IPFilter` model.
 
 ### Logging
-The system uses a granular logging configuration (`app/logging_config.py`) that outputs to 15 different log files in the `./logs` directory, separating concerns by API module and worker type.
+The system writes logs to `./logs/` (3 files: `api.log`, `worker.log`, `errors.log`) via `app/logging_config.py`.
 
 ### UI Development
-The frontend is built with vanilla JavaScript and CSS to avoid build-step complexity. Static assets are served from `app/static/` and proxy-passed through Nginx in production.
+The frontend is built with React, Vite, and Mantine UI. It handles its own routing using `react-router-dom` and interacts with the FastAPI backend via REST endpoints.

@@ -6,12 +6,13 @@ leveraging font name, size, color, bold/italic flags to determine
 content structure (headings, body, lists, etc.)
 """
 
-import pdfplumber
-import re
 import logging
-from typing import List, Dict, Any, Tuple, Optional
-from dataclasses import dataclass, field
+import re
 from collections import Counter, defaultdict
+from dataclasses import dataclass, field
+from typing import Any
+
+import pdfplumber
 
 logger = logging.getLogger(__name__)
 
@@ -19,11 +20,12 @@ logger = logging.getLogger(__name__)
 @dataclass
 class FontStyle:
     """Represents a unique font style in the document."""
+
     name: str
     size: float
     is_bold: bool
     is_italic: bool
-    color: Optional[Tuple] = None
+    color: tuple | None = None
 
     @property
     def key(self) -> str:
@@ -39,6 +41,7 @@ class FontStyle:
 @dataclass
 class TextSpan:
     """A span of text with uniform font styling."""
+
     text: str
     font: FontStyle
     x0: float
@@ -51,7 +54,8 @@ class TextSpan:
 @dataclass
 class TextLine:
     """A line of text composed of multiple spans."""
-    spans: List[TextSpan] = field(default_factory=list)
+
+    spans: list[TextSpan] = field(default_factory=list)
 
     @property
     def text(self) -> str:
@@ -64,7 +68,12 @@ class TextLine:
             else:
                 prev = self.spans[i - 1]
                 # Insert a space between spans if neither end has one
-                if prev.text and not prev.text[-1].isspace() and span.text and not span.text[0].isspace():
+                if (
+                    prev.text
+                    and not prev.text[-1].isspace()
+                    and span.text
+                    and not span.text[0].isspace()
+                ):
                     parts.append(" ")
                 parts.append(span.text)
         return "".join(parts)
@@ -86,7 +95,7 @@ class TextLine:
         return max(s.x1 for s in self.spans) if self.spans else 0
 
     @property
-    def dominant_font(self) -> Optional[FontStyle]:
+    def dominant_font(self) -> FontStyle | None:
         """Get the most common font in this line by character count."""
         if not self.spans:
             return None
@@ -115,7 +124,8 @@ class TextLine:
 @dataclass
 class TextBlock:
     """A block of text (paragraph, heading, list item, etc.)"""
-    lines: List[TextLine] = field(default_factory=list)
+
+    lines: list[TextLine] = field(default_factory=list)
     block_type: str = "body"  # h1, h2, h3, h4, h5, body, list, ordered_list, table
     indent_level: int = 0
 
@@ -136,7 +146,7 @@ class TextBlock:
         return min(l.x0 for l in self.lines) if self.lines else 0
 
     @property
-    def dominant_font(self) -> Optional[FontStyle]:
+    def dominant_font(self) -> FontStyle | None:
         if not self.lines:
             return None
         font_chars = Counter()
@@ -172,10 +182,10 @@ class FontHierarchy:
 
     def __init__(self):
         self.font_counts: Counter = Counter()  # FontStyle -> total char count
-        self.body_font: Optional[FontStyle] = None
-        self.heading_map: Dict[str, str] = {}  # font_key -> heading level
+        self.body_font: FontStyle | None = None
+        self.heading_map: dict[str, str] = {}  # font_key -> heading level
 
-    def analyze(self, all_spans: List[TextSpan]):
+    def analyze(self, all_spans: list[TextSpan]):
         """Analyze all spans to determine font hierarchy."""
         # Count characters per font style
         for span in all_spans:
@@ -192,7 +202,7 @@ class FontHierarchy:
 
         # Collect unique font sizes (excluding body and very small/footer fonts)
         unique_sizes = set()
-        for font_style, count in self.font_counts.items():
+        for font_style, _count in self.font_counts.items():
             if font_style.size > body_size * 0.8:  # Ignore tiny text (footers, etc.)
                 unique_sizes.add(font_style.size)
 
@@ -213,10 +223,12 @@ class FontHierarchy:
         # Bold text at body size -> promote to sub-heading if it's a standalone line
         # (This is handled during block classification, not here)
 
-        logger.info(f"Font hierarchy: body={self.body_font.name} {self.body_font.size}pt, "
-                     f"heading sizes={heading_sizes}, total fonts={len(self.font_counts)}")
+        logger.info(
+            f"Font hierarchy: body={self.body_font.name} {self.body_font.size}pt, "
+            f"heading sizes={heading_sizes}, total fonts={len(self.font_counts)}"
+        )
 
-    def get_level(self, font: FontStyle) -> Optional[str]:
+    def get_level(self, font: FontStyle) -> str | None:
         """Get the heading level for a font, or None if body text."""
         return self.heading_map.get(font.key)
 
@@ -251,10 +263,27 @@ class FontAwareExtractor:
         re.compile(r"^Lab\s*[-–—]\s*", re.IGNORECASE),
     ]
 
+    # Monospace font keywords for code detection
+    MONO_FONT_KEYWORDS = (
+        "mono", "courier", "consolas", "lucida console", "inconsolata",
+        "source code", "fira code", "jetbrains",
+    )
+
+    # Code detection keywords
+    CODE_KEYWORDS = (
+        "public", "private", "class", "void", "static", "System.out",
+        "println", "import", "def", "return", "function", "const", "let",
+        "var", "int ", "float ", "double ", "boolean ", "char ", "String",
+        "new ", "extends", "implements", "interface", "package",
+        "@Override", "@SuppressWarnings",
+    )
+
     def __init__(self):
         self.hierarchy = FontHierarchy()
 
-    def extract(self, pdf_path: str, table_bboxes_per_page: Optional[Dict[int, List]] = None) -> List[Dict[str, Any]]:
+    def extract(
+        self, pdf_path: str, table_bboxes_per_page: dict[int, list] | None = None
+    ) -> list[dict[str, Any]]:
         """
         Extract structured content from a PDF.
 
@@ -277,12 +306,14 @@ class FontAwareExtractor:
 
                 page_spans = self._extract_page_spans(page, page_num + 1, exclude_bboxes)
                 all_spans.extend(page_spans)
-                page_data.append({
-                    "page": page_num + 1,
-                    "width": page.width,
-                    "height": page.height,
-                    "spans": page_spans
-                })
+                page_data.append(
+                    {
+                        "page": page_num + 1,
+                        "width": page.width,
+                        "height": page.height,
+                        "spans": page_spans,
+                    }
+                )
 
         # Build font hierarchy from all spans
         self.hierarchy.analyze(all_spans)
@@ -294,16 +325,15 @@ class FontAwareExtractor:
             lines = self._filter_headers_footers(lines, pd["height"])
             blocks = self._lines_to_blocks(lines, pd["width"])
             self._classify_blocks(blocks)
-            results.append({
-                "page": pd["page"],
-                "blocks": blocks,
-                "width": pd["width"],
-                "height": pd["height"]
-            })
+            results.append(
+                {"page": pd["page"], "blocks": blocks, "width": pd["width"], "height": pd["height"]}
+            )
 
         return results
 
-    def _extract_page_spans(self, page, page_num: int, exclude_bboxes: List = None) -> List[TextSpan]:
+    def _extract_page_spans(
+        self, page, page_num: int, exclude_bboxes: list | None = None
+    ) -> list[TextSpan]:
         """Extract TextSpans from a pdfplumber page using char data."""
         chars = page.chars
         if not chars:
@@ -320,8 +350,10 @@ class FontAwareExtractor:
                 char_y = char.get("top", 0)
                 in_excluded = False
                 for bbox in exclude_bboxes:
-                    if (bbox[0] - 5 <= char_x <= bbox[2] + 5 and
-                        bbox[1] - 5 <= char_y <= bbox[3] + 5):
+                    if (
+                        bbox[0] - 5 <= char_x <= bbox[2] + 5
+                        and bbox[1] - 5 <= char_y <= bbox[3] + 5
+                    ):
                         in_excluded = True
                         break
                 if in_excluded:
@@ -343,22 +375,20 @@ class FontAwareExtractor:
                     color = tuple(c[:3])
 
             font = FontStyle(
-                name=font_name,
-                size=font_size,
-                is_bold=is_bold,
-                is_italic=is_italic,
-                color=color
+                name=font_name, size=font_size, is_bold=is_bold, is_italic=is_italic, color=color
             )
 
-            char_text = char.get("text", "")
+            char.get("text", "")
 
             if current_font is None:
                 current_font = font
                 current_chars = [char]
-            elif (font == current_font and
-                  current_chars and
-                  abs(char["top"] - current_chars[-1]["top"]) < 3 and
-                  char["x0"] - current_chars[-1]["x1"] < 15):
+            elif (
+                font == current_font
+                and current_chars
+                and abs(char["top"] - current_chars[-1]["top"]) < 3
+                and char["x0"] - current_chars[-1]["x1"] < 15
+            ):
                 # Same font, same line, reasonable gap → extend span
                 # If there's a visible word gap (> 25% of font size), insert a space
                 gap = char["x0"] - current_chars[-1]["x1"]
@@ -377,8 +407,10 @@ class FontAwareExtractor:
                 if current_chars:
                     # If this split is due to a word gap (not just font change),
                     # ensure trailing space so the next span doesn't merge with this one
-                    if (font == current_font and
-                            abs(char.get("top", 0) - current_chars[-1].get("top", 0)) < 3):
+                    if (
+                        font == current_font
+                        and abs(char.get("top", 0) - current_chars[-1].get("top", 0)) < 3
+                    ):
                         last_text = current_chars[-1].get("text", "")
                         if last_text and not last_text[-1].isspace():
                             space_char = dict(current_chars[-1])
@@ -400,7 +432,7 @@ class FontAwareExtractor:
 
         return spans
 
-    def _finalize_span(self, chars: List[Dict], font: FontStyle, page_num: int) -> Optional[TextSpan]:
+    def _finalize_span(self, chars: list[dict], font: FontStyle, page_num: int) -> TextSpan | None:
         """Create a TextSpan from accumulated characters."""
         text = "".join(c.get("text", "") for c in chars)
         if not text.strip():
@@ -415,10 +447,10 @@ class FontAwareExtractor:
             x1=max(c["x1"] for c in chars),
             top=min(c["top"] for c in chars),
             bottom=max(c["bottom"] for c in chars),
-            page=page_num
+            page=page_num,
         )
 
-    def _detect_columns(self, spans: List[TextSpan], page_width: float) -> List[List[TextSpan]]:
+    def _detect_columns(self, spans: list[TextSpan], page_width: float) -> list[list[TextSpan]]:
         """
         Detect if the page has a multi-column layout and split spans by column.
         Uses two strategies: bullet clustering (for bullet lists) and gap-based
@@ -466,16 +498,17 @@ class FontAwareExtractor:
 
         centers = sorted(sum(c) / len(c) for c in sig_clusters)
         for i in range(1, len(centers)):
-            if centers[i] - centers[i-1] < 50:
+            if centers[i] - centers[i - 1] < 50:
                 return None
 
-        logger.debug(f"Bullet clustering: {len(centers)} columns at "
-                     f"x={[f'{x:.0f}' for x in centers]}")
+        logger.debug(
+            f"Bullet clustering: {len(centers)} columns at x={[f'{x:.0f}' for x in centers]}"
+        )
 
         # Build boundaries as midpoints between cluster centers
         boundaries = [0]
         for i in range(1, len(centers)):
-            boundaries.append((centers[i-1] + centers[i]) / 2)
+            boundaries.append((centers[i - 1] + centers[i]) / 2)
         boundaries.append(page_width)
 
         # Split spans by x0 position
@@ -493,8 +526,9 @@ class FontAwareExtractor:
 
         columns = [c for c in columns if c]
         if len(columns) > 1:
-            logger.debug(f"Bullet-based {len(columns)}-col split: "
-                         f"spans={[len(c) for c in columns]}")
+            logger.debug(
+                f"Bullet-based {len(columns)}-col split: spans={[len(c) for c in columns]}"
+            )
             return columns
         return None
 
@@ -507,7 +541,9 @@ class FontAwareExtractor:
                 coverage[x] += 1
 
         text_left = next((i for i in range(resolution) if coverage[i] > 0), 0)
-        text_right = next((i for i in range(resolution - 1, -1, -1) if coverage[i] > 0), resolution - 1)
+        text_right = next(
+            (i for i in range(resolution - 1, -1, -1) if coverage[i] > 0), resolution - 1
+        )
         text_width = text_right - text_left
         if text_width < 100:
             return [all_spans]
@@ -552,18 +588,22 @@ class FontAwareExtractor:
                     columns[ci].append(s)
                     break
             else:
-                best = min(range(n), key=lambda i: abs(mid_x - (boundaries[i] + boundaries[i+1])/2))
+                best = min(
+                    range(n), key=lambda i: abs(mid_x - (boundaries[i] + boundaries[i + 1]) / 2)
+                )
                 columns[best].append(s)
 
         columns = [c for c in columns if c]
         if len(columns) > 1:
-            logger.debug(f"Gap-based {len(columns)}-col split: "
-                         f"boundaries={[f'{b:.0f}' for b in boundaries]}, "
-                         f"spans={[len(c) for c in columns]}")
+            logger.debug(
+                f"Gap-based {len(columns)}-col split: "
+                f"boundaries={[f'{b:.0f}' for b in boundaries]}, "
+                f"spans={[len(c) for c in columns]}"
+            )
             return columns
         return [all_spans]
 
-    def _spans_to_lines(self, spans: List[TextSpan], page_width: float = 0) -> List[TextLine]:
+    def _spans_to_lines(self, spans: list[TextSpan], page_width: float = 0) -> list[TextLine]:
         """Group spans into lines based on vertical position, with column detection."""
         if not spans:
             return []
@@ -592,7 +632,7 @@ class FontAwareExtractor:
 
         return all_lines
 
-    def _column_spans_to_lines(self, spans: List[TextSpan]) -> List[TextLine]:
+    def _column_spans_to_lines(self, spans: list[TextSpan]) -> list[TextLine]:
         """Group spans within a single column into lines."""
         if not spans:
             return []
@@ -628,7 +668,7 @@ class FontAwareExtractor:
 
         return lines
 
-    def _filter_headers_footers(self, lines: List[TextLine], page_height: float) -> List[TextLine]:
+    def _filter_headers_footers(self, lines: list[TextLine], page_height: float) -> list[TextLine]:
         """Remove page headers and footers."""
         header_cutoff = page_height * 0.05
         footer_cutoff = page_height * 0.90
@@ -657,7 +697,7 @@ class FontAwareExtractor:
 
         return filtered
 
-    def _lines_to_blocks(self, lines: List[TextLine], page_width: float) -> List[TextBlock]:
+    def _lines_to_blocks(self, lines: list[TextLine], page_width: float) -> list[TextBlock]:
         """
         Group lines into blocks (paragraphs) based on spacing and font.
         """
@@ -688,8 +728,8 @@ class FontAwareExtractor:
             font_changed = False
             if prev_font and curr_font:
                 font_changed = (
-                    abs(prev_font.size - curr_font.size) > 0.5 or
-                    prev_font.is_bold != curr_font.is_bold
+                    abs(prev_font.size - curr_font.size) > 0.5
+                    or prev_font.is_bold != curr_font.is_bold
                 )
 
             # Significant indent change?
@@ -700,17 +740,23 @@ class FontAwareExtractor:
             should_split = False
 
             # Large vertical gap → new block
-            avg_line_height = (prev_line.bottom - prev_line.top)
+            avg_line_height = prev_line.bottom - prev_line.top
             if gap > avg_line_height * 1.5:
                 should_split = True
 
-            # Font changed significantly → new block
+            # Font changed → new block (or moderate gap + bold change)
             if font_changed:
                 should_split = True
+            elif gap > avg_line_height * 0.8 and prev_font and curr_font:
+                # Moderate gap with any font difference → split
+                if prev_font.key != curr_font.key:
+                    should_split = True
 
             # Bullet or numbered item → new block
             line_text = line.text.strip()
-            if line_text and (line_text[0] in self.BULLET_CHARS or self.NUMBERED_PATTERN.match(line_text)):
+            if line_text and (
+                line_text[0] in self.BULLET_CHARS or self.NUMBERED_PATTERN.match(line_text)
+            ):
                 should_split = True
 
             # Significant indent change → new block
@@ -734,7 +780,7 @@ class FontAwareExtractor:
 
         return blocks
 
-    def _classify_blocks(self, blocks: List[TextBlock]):
+    def _classify_blocks(self, blocks: list[TextBlock]):
         """
         Classify each block's type using font hierarchy and content patterns.
         """
@@ -759,10 +805,12 @@ class FontAwareExtractor:
                 continue
 
             # Bold text at body-ish size, short and standalone → sub-heading
-            if (font.is_bold and
-                not self.hierarchy.is_body(font) and
-                len(text) < 100 and
-                len(block.lines) <= 2):
+            if (
+                font.is_bold
+                and not self.hierarchy.is_body(font)
+                and len(text) < 100
+                and len(block.lines) <= 2
+            ):
                 # Check if this looks like a heading to skip
                 if any(p.search(text) for p in self.SKIP_HEADING_PATTERNS):
                     block.block_type = "skip"
@@ -803,6 +851,16 @@ class FontAwareExtractor:
                 block.block_type = "ordered_list"
                 continue
 
+                    # Check for monospace fonts (code)
+            if font and self._is_monospace(font.name):
+                block.block_type = "code"
+                continue
+
+            # Check for code-like content using heuristics
+            if len(text) > 15 and self._looks_like_code(text):
+                block.block_type = "code"
+                continue
+
             # Indented text: only classify as list if it has bullet-like characteristics
             if block.indent_level > 0:
                 # Check if it looks like a continuation of previous block (body text)
@@ -815,8 +873,25 @@ class FontAwareExtractor:
             # Default: body
             block.block_type = "body"
 
+    def _is_monospace(self, font_name: str) -> bool:
+        name_lower = (font_name or "").lower()
+        return any(kw in name_lower for kw in self.MONO_FONT_KEYWORDS)
 
-def extract_font_aware(pdf_path: str) -> List[Dict[str, Any]]:
+    def _looks_like_code(self, text: str) -> bool:
+        if not text or len(text) < 10 or len(text) > 500:
+            return False
+        has_brackets = "(" in text and ")" in text
+        has_braces = "{" in text and "}" in text
+        has_semicolon = ";" in text
+        has_assignment = "=" in text and not text.startswith("=")
+        if (has_braces and has_semicolon) or (has_brackets and has_semicolon and has_assignment):
+            return True
+        kw_count = sum(1 for kw in self.CODE_KEYWORDS if kw in text)
+        syntax_score = sum([has_brackets, has_braces, has_semicolon, has_assignment])
+        return kw_count >= 2 and syntax_score >= 2
+
+
+def extract_font_aware(pdf_path: str) -> list[dict[str, Any]]:
     """Convenience function to extract structured content from PDF."""
     extractor = FontAwareExtractor()
     return extractor.extract(pdf_path)

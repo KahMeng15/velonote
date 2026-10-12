@@ -1,13 +1,13 @@
 # Development Guide
 
-This guide is for developers who want to contribute to MySmartNotes or run it locally for development purposes. The application has been refactored into a **Multi-Container Architecture** to improve scalability and maintainability.
+This guide is for developers who want to contribute to velonote or run it locally for development purposes. The application has been refactored into a **Multi-Container Architecture** to improve scalability and maintainability.
 
 ---
 
 ## 🏗️ Architecture Overview
 
 The system consists of 5 primary services:
-1.  **Frontend (Nginx):** Serves static files (HTML/JS/CSS) and acts as a reverse proxy for the API.
+1.  **Frontend (React + Vite):** Dev server at `localhost:5173` with `/api` proxied to the API. Production builds are served by Nginx.
 2.  **API (FastAPI):** Handles HTTP requests, authentication, and database operations.
 3.  **Worker (Python):** Processes background tasks like OCR, AI processing, and embedding generation.
 4.  **Database (PostgreSQL):** Persistent storage for application data and the task queue.
@@ -25,21 +25,29 @@ The easiest way to get started is using the pre-configured development Docker st
 ### 2. Setup
 ```bash
 # Clone the repository
-git clone <repo-url> mysmartnotes
-cd mysmartnotes
+git clone <repo-url> velonote
+cd velonote
 
 # Create a .env file from the example
 cp .env.example .env
 ```
-*Note: Ensure individual database variables in `.env` are set correctly. If running via Docker Compose, set `DB_HOST=db` and `REDIS_URL=redis://redis:6379/0`. If running locally on the host machine, use `DB_HOST=localhost` and `REDIS_URL=redis://localhost:6379/0`.*
+*Note: Ensure individual database variables in `.env` are set correctly. If running via Docker Compose, set `DB_HOST=db`. If running locally on the host machine, use `DB_HOST=localhost`.*
 
 ### 3. Start Development Environment
 ```bash
-docker-compose -f docker-compose.dev.yml up --build
+# Start all dev containers with file watchers
+docker compose -f docker-compose.dev.yml up
+
+# Or with built-in local Ollama:
+docker compose -f docker-compose.dev.yml --profile builtin up
+
+# Or using the dev script:
+./scripts/dev.sh --docker
 ```
-- **Application:** [http://localhost:8000](http://localhost:8000)
-- **API Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Frontend UI (Vite HMR):** [http://localhost:5173](http://localhost:5173)
+- **API Server & OpenAPI Docs:** [http://localhost:8000](http://localhost:8000) / [http://localhost:8000/docs](http://localhost:8000/docs)
 - **Postgres:** Exposed on port `5432` for local inspection.
+- **Ollama:** Exposed on port `11434` (when running with `--profile builtin`).
 
 ---
 
@@ -48,9 +56,9 @@ docker-compose -f docker-compose.dev.yml up --build
 If you prefer to run the Python code directly on your host machine for faster debugging:
 
 ### 1. Start Infrastructure
-The application requires PostgreSQL and Redis. Keep these containers running:
+The application requires PostgreSQL. Keep the container running:
 ```bash
-docker-compose up -d db redis
+docker-compose up -d db
 ```
 
 ### 2. Install Local Dependencies
@@ -71,30 +79,21 @@ This will start the **API** with hot-reload and the **Worker** as a background p
 
 ## 📜 Logging System
 
-The application uses a granular 15-file logging system. All logs are stored in the `./logs` directory in the project root.
+Logs are stored in `./logs/` via `app/logging_config.py`:
 
 | File | Description |
 | :--- | :--- |
-| `1-Frontend.log` | Nginx access and proxy logs. |
-| `2-All-API.log` | Aggregated logs from all API routers. |
-| `3-Auth-API.log` | Authentication and user management logs. |
-| `4-Notes-API.log` | Document upload and lecture management logs. |
-| ... | ... |
-| `10-Chat-Worker.log` | Background processing for AI chat. |
-| `11-Upload-Worker.log` | Background processing for OCR and file parsing. |
+| `api.log` | All API request logs. |
+| `worker.log` | Background worker logs. |
+| `errors.log` | ERROR-level logs from all sources. |
 
 ---
 
 ## 🧪 Testing
 
-The project uses `pytest` for testing.
-
+No Python test suite exists. Offline extraction test (no server needed):
 ```bash
-# Run all tests
-pytest
-
-# Run tests with coverage
-pytest --cov=app tests/
+python scripts/ProcessingAlgorithmTest/run_smart.py
 ```
 
 ---
@@ -111,7 +110,7 @@ The core logic resides in `app/processing/smart_pipeline.py`.
 - Use `scripts/ProcessingAlgorithmTest/run_smart.py` to test extraction on specific files without booting the whole app.
 
 ### Database Migrations
-We currently use SQLAlchemy's `Base.metadata.create_all()` for automatic schema initialization on startup. For complex migrations, ensure the API container starts first as it handles the `init_db()` call.
+Tables auto-created via `Base.metadata.create_all()` in `init_db()`. Schema changes go in `app/utils/db.py` as new `apply_*_migration()` functions called from `init_db()` — never hand-write SQL migration scripts.
 
 ### AI Configuration & 3-Tier Fallback
 The AI client (`app/processing/ai_client.py`) is designed with a 3-tier fallback hierarchy to ensure robustness:
@@ -119,7 +118,7 @@ The AI client (`app/processing/ai_client.py`) is designed with a 3-tier fallback
 2. **Tier 2 (Secondary)**: Fallback Reasoning LLM (default: `models/gemma-4-26b-a4b-it` via Gemini API).
 3. **Tier 3 (Local Fallback)**: Offline/local model (default: `llama3` or `gemma4:e2b` via Ollama).
 
-For testing LLM interactions, you can use `scripts/test_chat_logic.py` to verify prompt responses and fallback logic.
+For testing LLM extraction behavior offline, use `scripts/ProcessingAlgorithmTest/run_smart.py`.
 
 ---
 
