@@ -11,6 +11,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     gcc \
+    binutils \
     && rm -rf /var/lib/apt/lists/*
 
 # Create a virtual environment to keep dependencies isolated
@@ -19,59 +20,19 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 # Install Python dependencies
 COPY requirements.txt .
-
-# Download and install torch separately (download-r2.pytorch.org CDN has SSL handshake failure)
-# Use Python's urllib which works with download.pytorch.org directly
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --upgrade pip && \
-    pip install certifi
-# Download torch CPU wheel via urllib (download-r2.pytorch.org CDN has broken TLS)
-RUN python3 << 'PYEOF'
-import urllib.request, urllib.parse, os, sys, platform
-from html.parser import HTMLParser
-from urllib.parse import urljoin
+    pip install -r requirements.txt
 
-BASE = 'https://download.pytorch.org'
+# Prune virtual environment:
+# 1. Strip all binary shared objects to remove debug/unneeded symbols
+RUN find /opt/venv -name "*.so*" -exec strip --strip-unneeded {} + 2>/dev/null || true
 
-class Parser(HTMLParser):
-    def __init__(self):
-        super().__init__()
-        self.links = []
-    def handle_starttag(self, tag, attrs):
-        if tag == 'a':
-            for name, value in attrs:
-                if name == 'href' and '.whl' in value:
-                    self.links.append(value.split('#')[0])
+# 2. Remove test directories, caches, and unnecessary files across packages
+RUN find /opt/venv -type d \( -name "tests" -o -name "test" -o -name "__pycache__" \) -exec rm -rf {} + 2>/dev/null || true
 
-resp = urllib.request.urlopen(f'{BASE}/whl/cpu/torch/')
-p = Parser()
-p.feed(resp.read().decode())
-links = p.links
-
-tag = f'cp{sys.version_info.major}{sys.version_info.minor}-cp{sys.version_info.major}{sys.version_info.minor}'
-machine = platform.machine()
-match = [l for l in links if l.endswith('.whl') and tag in l and machine in l and 'manylinux' in l]
-if not match:
-    print(f'No torch wheel for {tag} on {machine}'); sys.exit(1)
-
-# Handle relative URLs from the directory listing
-raw_url = match[-1]
-if raw_url.startswith('/'):
-    raw_url = urljoin(BASE, raw_url)
-elif not raw_url.startswith('http'):
-    raw_url = urljoin(BASE + '/whl/cpu/torch/', raw_url)
-url = raw_url.replace('download-r2.pytorch.org', 'download.pytorch.org')
-name = urllib.parse.unquote(url.rsplit('/', 1)[-1])
-path = f'/tmp/torch-wheels/{name}'
-os.makedirs('/tmp/torch-wheels', exist_ok=True)
-if not os.path.exists(path):
-    print(f'Downloading {name}...')
-    urllib.request.urlretrieve(url, path)
-PYEOF
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install /tmp/torch-wheels/torch-*.whl && \
-    grep -v '^torch' requirements.txt > /tmp/requirements-notorch.txt && \
-    pip install --default-timeout=1000 --extra-index-url https://download.pytorch.org/whl/cpu -r /tmp/requirements-notorch.txt
+# 3. Remove build utilities from the production virtual environment
+RUN pip uninstall -y pip setuptools wheel
 
 
 # --- Stage 2: Runtime ---
@@ -90,39 +51,43 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Install runtime dependencies (e.g., Tesseract for OCR, Poppler for PDF images, OpenCV deps, FFmpeg, and postgresql-client for backups)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Prevent installing documentation/man pages in debian packages
+RUN printf 'path-exclude=/usr/share/doc/*\npath-exclude=/usr/share/man/*\npath-exclude=/usr/share/locale/*\n' > /etc/dpkg/dpkg.cfg.d/01_nodoc
+
+# Install runtime dependencies (Tesseract for OCR, Poppler for PDF images, OpenCV deps, FFmpeg, and postgresql-client for backups)
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     poppler-utils \
     postgresql-client \
     libsm6 \
     libxext6 \
-    libxrender-dev \
+    libxrender1 \
     curl \
     gosu \
     ffmpeg \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy the virtual environment from the builder stage
-COPY --from=builder /opt/venv /opt/venv
-
-# Copy application code
-COPY . .
+    && rm -rf /usr/share/doc/* /usr/share/man/*
 
 # Define build arguments for UID and GID (defaults to TrueNAS 'apps' user)
 ARG USER_ID=568
 ARG GROUP_ID=568
 
-# Create non-root user and setup directories
+# Create non-root user and persistent directories before copying application code
 RUN groupadd --gid ${GROUP_ID} appgroup \
     && useradd --create-home --shell /usr/sbin/nologin --uid ${USER_ID} --gid ${GROUP_ID} appuser \
     && mkdir -p /app/data /app/logs /app/backups \
     && chown -R appuser:appgroup /app
 
+# Copy the virtual environment from the builder stage
+COPY --from=builder /opt/venv /opt/venv
+
 # Prepare entrypoint script
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# Copy application code with non-root ownership (avoids duplicated overlay layer from chown -R)
+COPY --chown=appuser:appgroup . .
 
 # Expose port
 EXPOSE 8000

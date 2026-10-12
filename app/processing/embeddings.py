@@ -12,15 +12,56 @@ logger = logging.getLogger(__name__)
 embedding_model = None
 
 
+class FastEmbedModelWrapper:
+    """Lightweight SentenceTransformer-compatible wrapper powered by FastEmbed (ONNX Runtime)."""
+
+    def __init__(self, model_name: str = "sentence-transformers/all-MiniLM-L6-v2"):
+        from fastembed import TextEmbedding
+
+        self.model_name = model_name
+        self._model = TextEmbedding(model_name=model_name)
+        self.embedding_dim = 384
+
+    def encode(
+        self,
+        texts: str | list[str],
+        convert_to_tensor: bool = False,
+        convert_to_numpy: bool = True,
+        **kwargs,
+    ):
+        is_single = isinstance(texts, str)
+        items = [texts] if is_single else list(texts)
+        if not items:
+            return (
+                np.empty((0, self.embedding_dim), dtype=np.float32)
+                if not is_single
+                else np.zeros((self.embedding_dim,), dtype=np.float32)
+            )
+
+        vectors = list(self._model.embed(items))
+        if is_single:
+            return vectors[0]
+        return np.array(vectors)
+
+    def get_sentence_embedding_dimension(self) -> int:
+        return self.embedding_dim
+
+
 def get_embeddings_model():
-    """Get or load embeddings model"""
+    """Get or load embeddings model (prefers FastEmbed ONNX, falls back to SentenceTransformers)."""
     global embedding_model
     if embedding_model is None:
-        from sentence_transformers import SentenceTransformer
-
         try:
-            embedding_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
-            logger.info("Embeddings model loaded")
+            embedding_model = FastEmbedModelWrapper("sentence-transformers/all-MiniLM-L6-v2")
+            logger.info("FastEmbed embeddings model loaded (ONNX runtime)")
+        except ImportError:
+            try:
+                from sentence_transformers import SentenceTransformer
+
+                embedding_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+                logger.info("SentenceTransformer embeddings model loaded (fallback)")
+            except Exception as e:
+                logger.error(f"Failed to load sentence_transformers fallback: {e}")
         except Exception as e:
             logger.error(f"Failed to load embeddings model: {e}")
     return embedding_model
@@ -241,7 +282,8 @@ def compute_and_store_embeddings(resource_id: str, text: str, db) -> int:
 
         # Clean text to remove huge base64 images or markdown images before embedding
         import re
-        clean_text = re.sub(r'!\[.*?\]\(.*?\)', '', text)
+
+        clean_text = re.sub(r"!\[.*?\]\(.*?\)", "", text)
 
         # Split text into chunks
         chunks = []
