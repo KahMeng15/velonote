@@ -1,19 +1,26 @@
 """Semantic search and embeddings module"""
 
+import logging
+
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 class EmbeddingsManager:
     """Manage text embeddings and semantic search"""
 
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
+    def __init__(self, model_name: str = "sentence-transformers/all-MiniLM-L6-v2"):
         """Initialize embeddings model"""
-        from sentence_transformers import SentenceTransformer
-
         try:
             logger.info(f"Loading embeddings model: {model_name}")
-            self.model = SentenceTransformer(model_name)
-            self.embedding_dim = self.model.get_sentence_embedding_dimension()
+            from app.processing.embeddings import get_embeddings_model
+
+            self.model = get_embeddings_model()
+            if hasattr(self.model, "get_sentence_embedding_dimension"):
+                self.embedding_dim = self.model.get_sentence_embedding_dimension()
+            else:
+                self.embedding_dim = 384
             logger.info(f"Model loaded. Embedding dimension: {self.embedding_dim}")
         except Exception as e:
             logger.error(f"Error loading embeddings model: {e}")
@@ -23,16 +30,16 @@ class EmbeddingsManager:
         """Convert text to embeddings"""
         try:
             embedding = self.model.encode(text, convert_to_numpy=True)
-            return embedding
+            return np.asarray(embedding)
         except Exception as e:
             logger.error(f"Error embedding text: {e}")
             raise
 
-    def embed_texts(self, texts: List[str]) -> np.ndarray:
+    def embed_texts(self, texts: list[str]) -> np.ndarray:
         """Convert multiple texts to embeddings"""
         try:
             embeddings = self.model.encode(texts, convert_to_numpy=True)
-            return embeddings
+            return np.asarray(embeddings)
         except Exception as e:
             logger.error(f"Error embedding texts: {e}")
             raise
@@ -53,7 +60,7 @@ class EmbeddingsManager:
             logger.error(f"Error calculating similarity: {e}")
             raise
 
-    def search(self, query: str, documents: List[str], top_k: int = 5) -> List[Tuple[str, float]]:
+    def search(self, query: str, documents: list[str], top_k: int = 5) -> list[tuple[str, float]]:
         """
         Search for most similar documents to query
 
@@ -83,8 +90,8 @@ class EmbeddingsManager:
             raise
 
     def batch_search(
-        self, query: str, documents: List[str], chunk_size: int = 1000, top_k: int = 5
-    ) -> List[Tuple[str, float]]:
+        self, query: str, documents: list[str], chunk_size: int = 1000, top_k: int = 5
+    ) -> list[tuple[str, float]]:
         """
         Search through large document collections in batches
         Useful for large corpuses

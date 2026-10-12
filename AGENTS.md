@@ -147,3 +147,22 @@ Startup blocks if: `SECRET_KEY < 32 chars`, `DATABASE_URL` not PostgreSQL, or CO
 - Added backup management endpoints in `app/routers/admin.py` (`GET /admin/backups`, `POST /admin/backups/create`, `GET /admin/backups/{filename}/download`, `DELETE /admin/backups/{filename}`).
 - Integrated interactive backup management in `Admin.jsx` with a snapshots table, instant backup creation, download, delete, and retention schedule controls.
 
+### 2026-10-13 — Optimize Docker image size from ~3.2GB to ~900MB
+
+**Problem:** The Docker image for velonote was ~3.2GB uncompressed (888MB download). The bulk was due to:
+1. PyTorch CPU, Transformers, SciPy, Scikit-Learn, and SymPy being installed solely to generate embeddings with `all-MiniLM-L6-v2`.
+2. PyTorch wheel including ~70MB of C++ development headers (`torch/include`) and unstripped `.so` binaries.
+3. Debian `ffmpeg` package pulling full video codec chains, Mesa, and X11 graphics libraries.
+4. `libxrender-dev` installing dev headers instead of `libxrender1`.
+5. `.dockerignore` missing `backups/`, causing local database dumps to be baked into the image.
+6. `COPY . .` followed by `RUN chown -R` in a separate layer duplicating overlayfs metadata.
+
+**Fix:**
+- Replaced `torch`, `sentence-transformers`, `scipy`, and `scikit-learn` with `fastembed` (ONNX Runtime) in `requirements.txt`.
+- Built `FastEmbedModelWrapper` in `app/processing/embeddings.py` and `app/processing/search.py` producing 100% vector-identical embeddings (`cosine_similarity = 0.9999999`) with graceful fallback.
+- Streamlined `Dockerfile`: removed custom PyTorch wheel scraping, added binary `.so` stripping (`strip --strip-unneeded`), pruned package test suites and `__pycache__`, uninstalled `pip/setuptools/wheel` from runtime venv.
+- Replaced `libxrender-dev` with `libxrender1`, added dpkg doc exclusion rules, and pruned apt caches.
+- Updated `.dockerignore` to ignore `backups/`, test scripts, and dev configs.
+- Created `appuser` before copying and applied `--chown=appuser:appgroup` directly on `COPY . .`.
+- Accelerated CI build pipeline (`.github/workflows/docker.yml`): parallelized backend and frontend image builds across concurrent runners, removed redundant QEMU emulation overhead, added scoped GHA build caches (`scope=backend` and `scope=nginx`) to prevent cache eviction, and enabled BuildKit npm/apt cache mounts.
+
