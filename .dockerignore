@@ -42,10 +42,12 @@ docker-compose.yml
 docker-compose.dev.yml
 .dockerignore
 
-# Frontend (backend image does not need frontend source)
-frontend/
+# Frontend dependencies and build artifacts
 **/node_modules/
 frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/.eslintcache
 .kilo/node_modules/
 
 # Ignore logs

@@ -166,3 +166,10 @@ Startup blocks if: `SECRET_KEY < 32 chars`, `DATABASE_URL` not PostgreSQL, or CO
 - Created `appuser` before copying and applied `--chown=appuser:appgroup` directly on `COPY . .`.
 - Accelerated CI build pipeline (`.github/workflows/docker.yml`): parallelized backend and frontend image builds across concurrent runners, removed redundant QEMU emulation overhead, added scoped GHA build caches (`scope=backend` and `scope=nginx`) to prevent cache eviction, and enabled BuildKit npm/apt cache mounts.
 
+### 2026-10-13 — Fix Dockerfile.nginx build failure caused by global .dockerignore
+
+**Problem:** GitHub Actions CI job `build-nginx` failed with `CopyIgnoredFile: Attempting to Copy file "frontend" that is excluded by .dockerignore` and `"/frontend": not found`. The previous optimization commit added `frontend/` to the global `.dockerignore`, which blocked `app/Dockerfile.nginx` from accessing `frontend/` source code during its multi-stage build.
+
+**Fix:**
+- Removed `frontend/` from global `.dockerignore`, keeping build artifacts and dependency exclusions (`node_modules/`, `dist/`, etc.).
+- Created `Dockerfile.dockerignore` specifically for backend `Dockerfile` builds so the backend image continues to exclude `frontend/` without breaking `Dockerfile.nginx`.

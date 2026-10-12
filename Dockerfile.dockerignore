@@ -1,0 +1,70 @@
+# Git
+.git
+.github
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment and secrets
+.env
+secrets.env
+*.local
+
+# Application data (should be mounted as volumes)
+data/
+generated/
+output/
+uploads/
+models/
+model_training/
+media/
+
+# Documentation and scripts
+docs/
+scripts/
+README.md
+GEMINI.md
+AGENTS.md
+instrument_sans.zip
+
+# Docker
+Dockerfile
+Dockerfile.dockerignore
+docker-compose.yml
+docker-compose.dev.yml
+.dockerignore
+
+# Frontend (backend image does not need frontend source)
+frontend/
+**/node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/.eslintcache
+.kilo/node_modules/
+
+# Ignore logs
+logs/
+*.log
+
+# Backups and database dumps (mounted as volume)
+backups/
+*.sql
+*.dump
+*.tar.gz
+
+# Root test scripts and dev config
+test_*.py
+requirements-dev.txt
+.githooks/
+.gitleaks.toml
+ruff.toml
