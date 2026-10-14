@@ -78,15 +78,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Compute image tags and labels
+      - name: Compute backend image tags and labels
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/kahmeng15/velonote
           tags: |
-            # branch=main → :latest
+            type=raw,value=backend-latest,enable=${{ github.ref_name == 'main' }}
             type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
-            # always tag with short SHA for traceability
+            type=sha,prefix=backend-,format=short
             type=sha,prefix=,format=short
 
       - name: Build and push backend
@@ -101,8 +101,8 @@ jobs:
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
 
-  build-nginx:
-    name: Build & Push Nginx (Frontend)
+  build-frontend:
+    name: Build & Push Frontend
     runs-on: ubuntu-latest
     needs: validate-compose
     if: github.event_name == 'push'
@@ -120,26 +120,28 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Compute nginx image tags
-        id: meta-nginx
+      - name: Compute frontend image tags
+        id: meta-frontend
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/kahmeng15/velonote
           tags: |
+            type=raw,value=frontend-latest,enable=${{ github.ref_name == 'main' }}
             type=raw,value=nginx-latest,enable=${{ github.ref_name == 'main' }}
+            type=sha,prefix=frontend-,format=short
             type=sha,prefix=nginx-,format=short
 
-      - name: Build and push nginx
+      - name: Build and push frontend
         uses: docker/build-push-action@v6
         with:
           context: .
           file: app/Dockerfile.nginx
           push: true
-          tags: ${{ steps.meta-nginx.outputs.tags }}
-          labels: ${{ steps.meta-nginx.outputs.labels }}
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
           platforms: linux/amd64
-          cache-from: type=gha,scope=nginx
-          cache-to: type=gha,mode=max,scope=nginx
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Scan the pushed image for vulnerabilities
@@ -158,7 +160,7 @@ jobs:
 
       - name: Determine image tag
         id: tag
-        run: echo "image=ghcr.io/kahmeng15/velonote:latest" >> $GITHUB_OUTPUT
+        run: echo "image=ghcr.io/kahmeng15/velonote:backend-latest" >> $GITHUB_OUTPUT
 
       - name: Log in to GHCR
         uses: docker/login-action@v3

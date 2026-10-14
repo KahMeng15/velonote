@@ -19,7 +19,7 @@ services:
       retries: 5
 
   api:
-    image: ghcr.io/kahmeng15/velonote:latest
+    image: ghcr.io/kahmeng15/velonote:backend-latest
     container_name: velonote_api
     command: ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${API_PORT:-8000}"]
     depends_on:
@@ -45,7 +45,7 @@ services:
       - velonote-net
 
   worker:
-    image: ghcr.io/kahmeng15/velonote:latest
+    image: ghcr.io/kahmeng15/velonote:backend-latest
     container_name: velonote_worker
     command: ["python", "-m", "app.worker_main"]
     depends_on:
@@ -70,8 +70,8 @@ services:
     networks:
       - velonote-net
 
-  nginx:
-    image: ghcr.io/kahmeng15/velonote:nginx-latest
+  frontend:
+    image: ghcr.io/kahmeng15/velonote:frontend-latest
     container_name: velonote_frontend
     depends_on:
       - api

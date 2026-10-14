@@ -191,3 +191,11 @@ Startup blocks if: `SECRET_KEY < 32 chars`, `DATABASE_URL` not PostgreSQL, or CO
 - Updated `docker-entrypoint.sh` to include `/app/config` and `/app/backups` in `mkdir -p`, `chown -R`, and `chmod -R u+rwX`.
 - Updated `Dockerfile` to create `/app/config` during the image build step.
 - Wrapped `_ensure_config_file()` and `_generate_secrets()` in `app/config.py` with defensive `try-except` blocks to fall back to defaults rather than crashing the container if file writing fails.
+
+### 2026-10-14 — Rename image tags to backend and frontend
+
+**Problem:** Image tagging in GHCR and `docker-compose.yml` was asymmetric: backend was tagged `:latest` / `:<sha>` while frontend was tagged `:nginx-latest` / `:nginx-<sha>`, reflecting server technology rather than component role.
+
+**Fix:**
+- Updated `.github/workflows/docker.yml` to tag the backend image as `:backend-latest` and `:backend-<sha>` (retaining `:latest` and `:<sha>` for backwards compatibility), and the frontend image as `:frontend-latest` and `:frontend-<sha>` (retaining `:nginx-latest` as legacy fallback).
+- Updated `docker-compose.yml` to use `ghcr.io/kahmeng15/velonote:backend-latest` for `api` & `worker`, renamed service `nginx` to `frontend`, and tagged it with `ghcr.io/kahmeng15/velonote:frontend-latest`.
