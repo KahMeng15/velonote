@@ -199,3 +199,10 @@ Startup blocks if: `SECRET_KEY < 32 chars`, `DATABASE_URL` not PostgreSQL, or CO
 **Fix:**
 - Updated `.github/workflows/docker.yml` to tag the backend image as `:backend-latest` and `:backend-<sha>` (retaining `:latest` and `:<sha>` for backwards compatibility), and the frontend image as `:frontend-latest` and `:frontend-<sha>` (retaining `:nginx-latest` as legacy fallback).
 - Updated `docker-compose.yml` to use `ghcr.io/kahmeng15/velonote:backend-latest` for `api` & `worker`, renamed service `nginx` to `frontend`, and tagged it with `ghcr.io/kahmeng15/velonote:frontend-latest`.
+
+### 2026-10-14 — Fix NumPy/OpenBLAS ELF load command alignment crash caused by strip
+
+**Problem:** `velonote_worker` and `velonote_api` crashed on startup with `ImportError: libscipy_openblas64_-32a4b2a6.so: ELF load command address/offset not page-aligned` when importing NumPy/cv2. This happened because `strip --strip-unneeded` in `Dockerfile` was executed over all `.so` files in `/opt/venv`, which modified the precompiled ELF headers of vendored OpenBLAS binaries from PyPI wheels, violating Linux page-alignment constraints.
+
+**Fix:**
+- Removed `strip --strip-unneeded` from `Dockerfile`. Precompiled wheels on PyPI are already stripped and must not be re-stripped.

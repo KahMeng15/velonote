@@ -25,13 +25,10 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -r requirements.txt
 
 # Prune virtual environment:
-# 1. Strip all binary shared objects to remove debug/unneeded symbols
-RUN find /opt/venv -name "*.so*" -exec strip --strip-unneeded {} + 2>/dev/null || true
-
-# 2. Remove test directories, caches, and unnecessary files across packages
+# 1. Remove test directories, caches, and unnecessary files across packages
 RUN find /opt/venv -type d \( -name "tests" -o -name "test" -o -name "__pycache__" \) -exec rm -rf {} + 2>/dev/null || true
 
-# 3. Remove build utilities from the production virtual environment
+# 2. Remove build utilities from the production virtual environment
 RUN pip uninstall -y pip setuptools wheel
 
 
