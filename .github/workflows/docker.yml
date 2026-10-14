@@ -25,6 +25,7 @@ jobs:
           # Stub .env — matches what operators provide (no secrets here)
           cat > .env << 'EOF'
           DB_USER=velonote
+          DB_PASSWORD=ci-placeholder-not-a-real-password
           DB_HOST=db
           DB_PORT=5432
           DB_NAME=velonote
@@ -46,13 +47,6 @@ jobs:
           FIREBASE_MESSAGING_SENDER_ID=
           FIREBASE_APP_ID=
           FIREBASE_MEASUREMENT_ID=
-          EOF
-
-          # Stub secrets.env — values are obviously fake CI placeholders
-          cat > secrets.env << 'EOF'
-          DB_PASSWORD=ci-placeholder-not-a-real-password
-          SECRET_KEY=ci-placeholder-not-a-real-jwt-signing-key
-          APP_ENCRYPTION_KEY=ci-placeholder-not-a-real-fernet-key
           EOF
 
       - name: Validate docker-compose.yml

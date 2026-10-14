@@ -76,7 +76,7 @@ ARG GROUP_ID=568
 # Create non-root user and persistent directories before copying application code
 RUN groupadd --gid ${GROUP_ID} appgroup \
     && useradd --create-home --shell /usr/sbin/nologin --uid ${USER_ID} --gid ${GROUP_ID} appuser \
-    && mkdir -p /app/data /app/logs /app/backups \
+    && mkdir -p /app/data /app/logs /app/backups /app/config \
     && chown -R appuser:appgroup /app
 
 # Copy the virtual environment from the builder stage

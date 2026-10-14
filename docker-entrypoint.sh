@@ -10,12 +10,13 @@ echo "Starting velonote Entrypoint..."
 echo "Container running as UID: $(id -u), GID: $(id -g)"
 
 # Ensure required directories exist on the host-mounted volumes
-mkdir -p /app/data/notes /app/data/generated /app/data/output /app/data/postgres /app/data/redis /app/logs
+mkdir -p /app/data/notes /app/data/generated /app/data/output /app/data/postgres /app/data/redis /app/logs /app/config /app/backups
 
 # Fix permissions for host-mounted volumes
 # This allows the container to 'claim' ownership of folders owned by root
-echo "Fixing permissions for /app/data and /app/logs (Target UID: $USER_ID)..."
-chown -R $USER_ID:$GROUP_ID /app/data /app/logs
+echo "Fixing permissions for mounted volumes (Target UID: $USER_ID)..."
+chown -R $USER_ID:$GROUP_ID /app/data /app/logs /app/config /app/backups
+chmod -R u+rwX /app/data /app/logs /app/config /app/backups 2>/dev/null || true
 
 # Drop privileges and execute the application
 # We use gosu to ensure the python process runs as the non-root 'appuser'

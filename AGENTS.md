@@ -173,3 +173,21 @@ Startup blocks if: `SECRET_KEY < 32 chars`, `DATABASE_URL` not PostgreSQL, or CO
 **Fix:**
 - Removed `frontend/` from global `.dockerignore`, keeping build artifacts and dependency exclusions (`node_modules/`, `dist/`, etc.).
 - Created `Dockerfile.dockerignore` specifically for backend `Dockerfile` builds so the backend image continues to exclude `frontend/` without breaking `Dockerfile.nginx`.
+
+### 2026-10-14 — Remove duplicate DB_PASSWORD from secrets.env & make secrets.env optional in Docker Compose
+
+**Problem:** `DB_PASSWORD` was duplicated across both `.env` and `secrets.env`. Furthermore, `docker-compose.yml` and `docker-compose.dev.yml` hard-required `secrets.env` under `env_file`, preventing users from starting Docker Compose cleanly on a fresh clone where `secrets.env` had not yet been generated.
+
+**Fix:**
+- Removed `DB_PASSWORD` from `secrets.env.example`, the active `secrets.env`, and removed its automatic generation in `app/config.py` `_generate_secrets()`. Database connection credentials now reside exclusively in `.env`.
+- Changed `secrets.env` in `docker-compose.yml` and `docker-compose.dev.yml` to use `path: secrets.env, required: false`. Docker Compose will no longer fail if `secrets.env` is absent on boot.
+- Updated `.github/workflows/docker.yml` to validate compose configurations without requiring a stub `secrets.env`.
+
+### 2026-10-14 — Fix PermissionError on /app/config/app.config.json in Docker containers
+
+**Problem:** Worker or API containers crashed on boot with `PermissionError: [Errno 13] Permission denied: '/app/config/app.config.json'`. This occurred because `./config` was mounted as a volume owned by host/root, but `docker-entrypoint.sh` only adjusted permissions for `/app/data` and `/app/logs`, leaving `/app/config` and `/app/backups` un-chowned. When `appuser` (UID 568) tried to create `app.config.json` via `_ensure_config_file()`, the OS denied write permissions.
+
+**Fix:**
+- Updated `docker-entrypoint.sh` to include `/app/config` and `/app/backups` in `mkdir -p`, `chown -R`, and `chmod -R u+rwX`.
+- Updated `Dockerfile` to create `/app/config` during the image build step.
+- Wrapped `_ensure_config_file()` and `_generate_secrets()` in `app/config.py` with defensive `try-except` blocks to fall back to defaults rather than crashing the container if file writing fails.

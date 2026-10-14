@@ -2,7 +2,7 @@
 
 Loading priority (highest → lowest):
   1. Real environment variables (docker / shell exports)
-  2. secrets.env  — auto-generated secrets (SECRET_KEY, APP_ENCRYPTION_KEY, DB_PASSWORD)
+  2. secrets.env  — auto-generated secrets (SECRET_KEY, APP_ENCRYPTION_KEY)
   3. .env          — SMTP, AI tiers, Firebase, DB host/user/port, Redis, HOST, PORT
   4. config/app.config.json — non-sensitive runtime defaults (auto-created if absent)
 """
@@ -78,18 +78,18 @@ _CONFIG_DEFAULTS: dict = {
 
 def _ensure_config_file() -> dict:
     """Create config/app.config.json with defaults if it does not exist."""
-    _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    if not _CONFIG_FILE.exists():
-        _CONFIG_FILE.write_text(json.dumps(_CONFIG_DEFAULTS, indent=2) + "\n", encoding="utf-8")
-        print(
-            f"[velonote] Created default config file: {_CONFIG_FILE}",
-            file=sys.stderr,
-        )
     try:
+        _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        if not _CONFIG_FILE.exists():
+            _CONFIG_FILE.write_text(json.dumps(_CONFIG_DEFAULTS, indent=2) + "\n", encoding="utf-8")
+            print(
+                f"[velonote] Created default config file: {_CONFIG_FILE}",
+                file=sys.stderr,
+            )
         return json.loads(_CONFIG_FILE.read_text(encoding="utf-8"))
     except Exception as exc:
-        print(f"[velonote] WARNING: Could not parse {_CONFIG_FILE}: {exc}", file=sys.stderr)
-        return {}
+        print(f"[velonote] WARNING: Could not read or create {_CONFIG_FILE}: {exc}", file=sys.stderr)
+        return dict(_CONFIG_DEFAULTS)
 
 
 def _generate_secrets() -> None:
@@ -120,19 +120,14 @@ def _generate_secrets() -> None:
             file=sys.stderr,
         )
 
-    if not existing.get("DB_PASSWORD"):
-        db_pass = secrets.token_urlsafe(24)
-        lines_to_append.append(f"DB_PASSWORD={db_pass}")
-        print(
-            "[velonote] Generated new DB_PASSWORD → secrets.env",
-            file=sys.stderr,
-        )
-
     if lines_to_append:
-        with _SECRETS_FILE.open("a", encoding="utf-8") as fh:
-            if _SECRETS_FILE.stat().st_size > 0:
-                fh.write("\n")
-            fh.write("\n".join(lines_to_append) + "\n")
+        try:
+            with _SECRETS_FILE.open("a", encoding="utf-8") as fh:
+                if _SECRETS_FILE.stat().st_size > 0:
+                    fh.write("\n")
+                fh.write("\n".join(lines_to_append) + "\n")
+        except Exception as exc:
+            print(f"[velonote] WARNING: Could not write secrets to {_SECRETS_FILE}: {exc}", file=sys.stderr)
 
 
 def _load_env_files() -> dict[str, str | None]:
