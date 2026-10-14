@@ -206,3 +206,12 @@ Startup blocks if: `SECRET_KEY < 32 chars`, `DATABASE_URL` not PostgreSQL, or CO
 
 **Fix:**
 - Removed `strip --strip-unneeded` from `Dockerfile`. Precompiled wheels on PyPI are already stripped and must not be re-stripped.
+
+### 2026-10-14 — Relocate secrets.env to config/ directory
+
+**Problem:** `secrets.env` was placed in the project root, which is not mounted as a volume in production Docker Compose (`./config:/app/config` is mounted). This prevented auto-generated secrets from persisting to the host and being automatically shared between `api` and `worker` containers.
+
+**Fix:**
+- Relocated `secrets.env` and `secrets.env.example` to `config/secrets.env` and `config/secrets.env.example`.
+- Updated `app/config.py` to auto-generate and prioritize `config/secrets.env`, while preserving backward-compatible fallback to root `secrets.env`.
+- Updated `docker-compose.yml` and `docker-compose.dev.yml` to optionally load `config/secrets.env`.

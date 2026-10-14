@@ -27,6 +27,8 @@ services:
         condition: service_healthy
     env_file:
       - .env
+      - path: config/secrets.env
+        required: false
       - path: secrets.env
         required: false
     environment:
@@ -53,6 +55,8 @@ services:
         condition: service_healthy
     env_file:
       - .env
+      - path: config/secrets.env
+        required: false
       - path: secrets.env
         required: false
     environment:

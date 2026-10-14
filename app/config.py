@@ -2,7 +2,7 @@
 
 Loading priority (highest → lowest):
   1. Real environment variables (docker / shell exports)
-  2. secrets.env  — auto-generated secrets (SECRET_KEY, APP_ENCRYPTION_KEY)
+  2. config/secrets.env — auto-generated secrets (SECRET_KEY, APP_ENCRYPTION_KEY)
   3. .env          — SMTP, AI tiers, Firebase, DB host/user/port, Redis, HOST, PORT
   4. config/app.config.json — non-sensitive runtime defaults (auto-created if absent)
 """
@@ -29,9 +29,10 @@ _HERE = Path(__file__).resolve().parent  # app/
 _ROOT = _HERE.parent  # project root
 
 _ENV_FILE = _ROOT / ".env"
-_SECRETS_FILE = _ROOT / "secrets.env"
 _CONFIG_DIR = _ROOT / "config"
 _CONFIG_FILE = _CONFIG_DIR / "app.config.json"
+_SECRETS_FILE = _CONFIG_DIR / "secrets.env"
+_LEGACY_SECRETS_FILE = _ROOT / "secrets.env"
 
 
 # ---------------------------------------------------------------------------
@@ -93,8 +94,11 @@ def _ensure_config_file() -> dict:
 
 
 def _generate_secrets() -> None:
-    """Generate missing secrets and append them to secrets.env."""
-    existing = dotenv_values(_SECRETS_FILE) if _SECRETS_FILE.exists() else {}
+    """Generate missing secrets and append them to config/secrets.env."""
+    _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    # Prefer config/secrets.env; if only legacy root secrets.env exists, use it
+    target_file = _SECRETS_FILE if _SECRETS_FILE.exists() or not _LEGACY_SECRETS_FILE.exists() else _LEGACY_SECRETS_FILE
+    existing = dotenv_values(target_file) if target_file.exists() else {}
 
     lines_to_append: list[str] = []
 
@@ -102,7 +106,7 @@ def _generate_secrets() -> None:
         key = secrets.token_hex(32)
         lines_to_append.append(f"SECRET_KEY={key}")
         print(
-            "[velonote] Generated new SECRET_KEY → secrets.env",
+            f"[velonote] Generated new SECRET_KEY → {target_file.name}",
             file=sys.stderr,
         )
 
@@ -116,26 +120,27 @@ def _generate_secrets() -> None:
             fernet_key = secrets.token_urlsafe(32)
         lines_to_append.append(f"APP_ENCRYPTION_KEY={fernet_key}")
         print(
-            "[velonote] Generated new APP_ENCRYPTION_KEY → secrets.env",
+            f"[velonote] Generated new APP_ENCRYPTION_KEY → {target_file.name}",
             file=sys.stderr,
         )
 
     if lines_to_append:
         try:
-            with _SECRETS_FILE.open("a", encoding="utf-8") as fh:
-                if _SECRETS_FILE.stat().st_size > 0:
+            with target_file.open("a", encoding="utf-8") as fh:
+                if target_file.stat().st_size > 0:
                     fh.write("\n")
                 fh.write("\n".join(lines_to_append) + "\n")
         except Exception as exc:
-            print(f"[velonote] WARNING: Could not write secrets to {_SECRETS_FILE}: {exc}", file=sys.stderr)
+            print(f"[velonote] WARNING: Could not write secrets to {target_file}: {exc}", file=sys.stderr)
 
 
 def _load_env_files() -> dict[str, str | None]:
-    """Merge .env + secrets.env into a single dict (real env vars take precedence)."""
+    """Merge .env + config/secrets.env into a single dict (real env vars take precedence)."""
     base = dotenv_values(_ENV_FILE) if _ENV_FILE.exists() else {}
+    legacy = dotenv_values(_LEGACY_SECRETS_FILE) if _LEGACY_SECRETS_FILE.exists() else {}
     secrets_vals = dotenv_values(_SECRETS_FILE) if _SECRETS_FILE.exists() else {}
-    # secrets.env values override .env (so generated values aren't shadowed)
-    merged = {**base, **secrets_vals}
+    # config/secrets.env values override legacy root secrets.env and .env
+    merged = {**base, **legacy, **secrets_vals}
     # Real environment variables always win
     for key in list(merged.keys()):
         if key in os.environ:
@@ -378,8 +383,8 @@ class Settings(BaseSettings):
         )
 
     class Config:
-        # Load .env first, then secrets.env (later entries win for duplicates)
-        env_file = (str(_ENV_FILE), str(_SECRETS_FILE))
+        # Load .env first, then legacy secrets.env, then config/secrets.env
+        env_file = (str(_ENV_FILE), str(_LEGACY_SECRETS_FILE), str(_SECRETS_FILE))
         env_file_encoding = "utf-8"
         case_sensitive = True
         extra = "ignore"
