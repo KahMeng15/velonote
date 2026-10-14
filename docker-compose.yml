@@ -7,30 +7,20 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME:-velonote}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - ./pgdata:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     networks:
       - velonote-net
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   api:
     image: ghcr.io/kahmeng15/velonote:backend-latest
     container_name: velonote_api
     command: ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${API_PORT:-8000}"]
     depends_on:
-      db:
-        condition: service_healthy
+      - db
     env_file:
       - .env
-      - path: config/secrets.env
-        required: false
-      - path: secrets.env
-        required: false
     environment:
       # Override DB_HOST to point at the db container (not localhost)
       - DB_HOST=db
@@ -40,8 +30,6 @@ services:
       - ./data:/app/data
       - ./logs:/app/logs
       - ./config:/app/config
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     restart: unless-stopped
     networks:
       - velonote-net
@@ -51,14 +39,9 @@ services:
     container_name: velonote_worker
     command: ["python", "-m", "app.worker_main"]
     depends_on:
-      db:
-        condition: service_healthy
+      - db
     env_file:
       - .env
-      - path: config/secrets.env
-        required: false
-      - path: secrets.env
-        required: false
     environment:
       - DB_HOST=db
       - USER_ID=${PUID:-568}
@@ -68,8 +51,6 @@ services:
       - ./logs:/app/logs
       - ./config:/app/config
       - ./backups/postgres:/app/backups
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     restart: unless-stopped
     networks:
       - velonote-net
@@ -101,7 +82,7 @@ services:
     ports:
       - "${OLLAMA_PORT:-11434}:11434"
     volumes:
-      - ollama_models:/root/.ollama
+      - ./ollama_models:/root/.ollama
     environment:
       - OLLAMA_KEEP_ALIVE=24h
       - OLLAMA_NUM_PARALLEL=1
@@ -127,10 +108,6 @@ services:
     networks:
       - velonote-net
     restart: "no"
-
-volumes:
-  pgdata:
-  ollama_models:
 
 networks:
   velonote-net:

@@ -52,6 +52,8 @@ secrets.env
 *.db
 *.sqlite
 *.sqlite3
+pgdata/
+ollama_models/
 
 # Logs
 /logs/*

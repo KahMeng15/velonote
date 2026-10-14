@@ -215,3 +215,18 @@ Startup blocks if: `SECRET_KEY < 32 chars`, `DATABASE_URL` not PostgreSQL, or CO
 - Relocated `secrets.env` and `secrets.env.example` to `config/secrets.env` and `config/secrets.env.example`.
 - Updated `app/config.py` to auto-generate and prioritize `config/secrets.env`, while preserving backward-compatible fallback to root `secrets.env`.
 - Updated `docker-compose.yml` and `docker-compose.dev.yml` to optionally load `config/secrets.env`.
+
+### 2026-10-14 — Streamline Docker Compose: local bind mounts, env_file simplification, and init_db retry
+
+**Problem:**
+1. Postgres (`pgdata:`) and Ollama (`ollama_models:`) used Docker-managed named volumes instead of local directory folders in the deployment directory.
+2. `docker-compose.yml` had redundant `env_file` paths for `secrets.env`, which Python (`app/config.py` via Pydantic) already auto-discovers directly from `/app/config/secrets.env`.
+3. Startup depended on `condition: service_healthy` on `db`, delaying container starts and failing if healthchecks drifted.
+4. `extra_hosts` added unnecessary host-gateway resolution for purely containerized deployments.
+
+**Fix:**
+- Switched Postgres and Ollama volumes to local bind mounts (`./pgdata:/var/lib/postgresql/data` and `./ollama_models:/root/.ollama`), eliminating top-level named volumes.
+- Added `pgdata/` and `ollama_models/` to `.gitignore`, `.dockerignore`, and `Dockerfile.dockerignore`.
+- Simplified `env_file` to only `- .env` in `docker-compose.yml` and `docker-compose.dev.yml`.
+- Added resilient connection retry loop (15 attempts with 2s interval) in `init_db()` in `app/utils/db.py`, allowing containers to boot cleanly without `condition: service_healthy`.
+- Removed `extra_hosts` host-gateway mappings.

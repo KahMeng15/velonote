@@ -105,15 +105,25 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
-def init_db():
-    """Initialize database with tables and apply simple migrations"""
+def init_db(max_retries: int = 15, retry_interval: float = 2.0):
+    """Initialize database with tables and apply simple migrations with retry support."""
+    import time
+
     logger.info("Initializing database...")
-    try:
-        Base.metadata.create_all(bind=engine)
-        logger.info("Database tables created/verified")
-    except Exception as e:
-        logger.error(f"Failed to create database tables: {e}", exc_info=True)
-        raise
+    for attempt in range(1, max_retries + 1):
+        try:
+            Base.metadata.create_all(bind=engine)
+            logger.info("Database tables created/verified")
+            break
+        except Exception as e:
+            if attempt < max_retries:
+                logger.warning(
+                    f"Database connection attempt {attempt}/{max_retries} failed: {e}. Retrying in {retry_interval}s..."
+                )
+                time.sleep(retry_interval)
+            else:
+                logger.error(f"Failed to create database tables after {max_retries} attempts: {e}", exc_info=True)
+                raise
 
     # Apply migrations for type changes (e.g. ChatMessage ID change)
     try:

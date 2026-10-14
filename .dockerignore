@@ -56,6 +56,8 @@ logs/
 
 # Backups and database dumps (mounted as volume)
 backups/
+pgdata/
+ollama_models/
 *.sql
 *.dump
 *.tar.gz
