@@ -105,37 +105,109 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
+def diagnose_db_error(exc: Exception) -> str:
+    """Analyze a database exception and return a clear, human-readable diagnosis and actionable suggestion."""
+    err_str = str(exc).strip()
+
+    # 1. Authentication failure
+    if "password authentication failed" in err_str or "28P01" in err_str:
+        return (
+            f"AUTHENTICATION FAILED: Could not log in with user '{settings.DB_USER}'. "
+            f"Please verify DB_USER and DB_PASSWORD in your .env file."
+        )
+
+    # 2. Database does not exist
+    if ("database" in err_str and "does not exist" in err_str) or "3D000" in err_str:
+        import re
+
+        match = re.search(r'database "([^"]+)" does not exist', err_str)
+        db_name = match.group(1) if match else settings.DB_NAME
+        return (
+            f"DATABASE NOT FOUND: The database '{db_name}' does not exist on PostgreSQL server {settings.DB_HOST}:{settings.DB_PORT}. "
+            f"Please create it first on your PostgreSQL server (e.g., 'CREATE DATABASE {db_name};')."
+        )
+
+    # 3. Table / Relation does not exist
+    if ("relation" in err_str and "does not exist" in err_str) or "42P01" in err_str:
+        import re
+
+        match = re.search(r'relation "([^"]+)" does not exist', err_str)
+        table_name = match.group(1) if match else "unknown"
+        return (
+            f"TABLE MISSING: The table '{table_name}' does not exist in database '{settings.DB_NAME}'. "
+            f"Please check if database migrations or schema creation ran successfully."
+        )
+
+    # 4. Host resolution / DNS failure
+    if (
+        "could not translate host name" in err_str
+        or "Name or service not known" in err_str
+        or "getaddrinfo failed" in err_str
+    ):
+        return (
+            f"CANNOT REACH HOST (DNS Failure): Cannot resolve hostname '{settings.DB_HOST}'. "
+            f"Check that DB_HOST in your .env is spelled correctly and reachable from inside the Docker container."
+        )
+
+    # 5. Connection refused
+    if "Connection refused" in err_str or "could not connect to server" in err_str:
+        docker_hint = ""
+        if settings.DB_HOST in ("localhost", "127.0.0.1"):
+            docker_hint = (
+                f"\n  → HINT: Inside a Docker container, '{settings.DB_HOST}' points to the container itself! "
+                f"If PostgreSQL is running on the host machine OS, use 'host.docker.internal' (with extra_hosts) or your host machine's LAN IP."
+            )
+        return (
+            f"CONNECTION REFUSED: Could not connect to PostgreSQL at {settings.DB_HOST}:{settings.DB_PORT}. "
+            f"The server is either not running or not listening on port {settings.DB_PORT}.{docker_hint}"
+        )
+
+    # 6. Network timeout / Unreachable
+    if "timed out" in err_str or "Network is unreachable" in err_str or "No route to host" in err_str:
+        return (
+            f"NETWORK TIMEOUT / UNREACHABLE: Network connection to {settings.DB_HOST}:{settings.DB_PORT} timed out. "
+            f"Check firewall settings and ensure port {settings.DB_PORT} is open and accepting traffic from Docker."
+        )
+
+    # 7. Permission denied
+    if "permission denied" in err_str or "42501" in err_str:
+        return (
+            f"PERMISSION DENIED: User '{settings.DB_USER}' does not have sufficient privileges in database '{settings.DB_NAME}': {err_str}"
+        )
+
+    # Fallback to general error with original string
+    return f"DATABASE ERROR ({type(exc).__name__}): {err_str}"
+
+
 def init_db(max_retries: int = 15, retry_interval: float = 2.0):
     """Initialize database with tables and apply simple migrations with retry support."""
     import time
+    from sqlalchemy import text
 
     logger.info(
         f"Connecting to PostgreSQL database '{settings.DB_NAME}' on {settings.DB_HOST}:{settings.DB_PORT} as user '{settings.DB_USER}'..."
     )
+    last_diagnosis = ""
     for attempt in range(1, max_retries + 1):
         try:
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
             Base.metadata.create_all(bind=engine)
             logger.info("Database tables created/verified successfully")
             break
         except Exception as e:
+            last_diagnosis = diagnose_db_error(e)
             if attempt < max_retries:
                 logger.warning(
-                    f"Database connection attempt {attempt}/{max_retries} to {settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME} failed: {e}. Retrying in {retry_interval}s..."
+                    f"Database connection attempt {attempt}/{max_retries} failed:\n  → {last_diagnosis}\n  Retrying in {retry_interval}s..."
                 )
                 time.sleep(retry_interval)
             else:
                 logger.error(
-                    f"Failed to connect to database at {settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME} after {max_retries} attempts: {e}\n"
-                    f"Troubleshooting hints for external PostgreSQL:\n"
-                    f"  1. Is DB_HOST='{settings.DB_HOST}' reachable from inside this Docker container?\n"
-                    f"     - If DB is on the host OS: DB_HOST cannot be 'localhost' or '127.0.0.1' inside a container. Use the host LAN IP or gateway IP (e.g. 172.17.0.1) or extra_hosts.\n"
-                    f"     - If DB is in another Docker container: Ensure both containers are connected to the same Docker network.\n"
-                    f"  2. Check PostgreSQL listen_addresses: ensure postgresql.conf has listen_addresses = '*'.\n"
-                    f"  3. Check pg_hba.conf: ensure PostgreSQL allows connections from Docker subnets.\n"
-                    f"  4. Verify DB_USER='{settings.DB_USER}', DB_NAME='{settings.DB_NAME}', and DB_PASSWORD.",
+                    f"Failed to connect to database after {max_retries} attempts:\n  → {last_diagnosis}",
                     exc_info=True,
                 )
-                raise
+                raise RuntimeError(f"Database initialization failed: {last_diagnosis}") from e
 
     # Apply migrations for type changes (e.g. ChatMessage ID change)
     try:

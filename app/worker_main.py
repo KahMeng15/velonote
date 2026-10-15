@@ -119,10 +119,13 @@ async def process_next_task():
         return True
 
     except Exception as e:
-        logger.error(f"Task processing failed: {e}")
+        from app.utils.db import diagnose_db_error
+
+        diag = diagnose_db_error(e)
+        logger.error(f"Task processing failed:\n  → {diag}")
         logger.error(traceback.format_exc())
         if "task_id" in locals():
-            TaskManager._update_db_task(task_id, status="failed", error=str(e), progress=0)
+            TaskManager._update_db_task(task_id, status="failed", error=diag, progress=0)
         db.rollback()
         return False
     finally:
@@ -158,7 +161,9 @@ async def main():
                 logger.info("Worker shutting down...")
                 break
             except Exception as e:
-                logger.error(f"Worker loop error: {e}")
+                from app.utils.db import diagnose_db_error
+
+                logger.error(f"Worker loop error:\n  → {diagnose_db_error(e)}")
                 await asyncio.sleep(5)
     finally:
         backup_task.cancel()

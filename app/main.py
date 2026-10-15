@@ -521,22 +521,24 @@ def health_check():
     """Health check endpoint — distinguishes API vs DB status."""
     from sqlalchemy import text
 
-    from app.utils.db import SessionLocal
+    from app.utils.db import SessionLocal, diagnose_db_error
 
     db_ok = False
+    db_error = None
     db = SessionLocal()
     try:
         db.execute(text("SELECT 1"))
         db.commit()
         db_ok = True
-    except Exception:
+    except Exception as e:
         db_ok = False
+        db_error = diagnose_db_error(e)
     finally:
         db.close()
 
     if db_ok:
         return {"status": "healthy", "api": "ok", "database": "ok"}
-    return {"status": "degraded", "api": "ok", "database": "down"}
+    return {"status": "degraded", "api": "ok", "database": "down", "detail": db_error}
 
 
 @app.get("/docs")

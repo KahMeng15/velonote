@@ -230,3 +230,19 @@ Startup blocks if: `SECRET_KEY < 32 chars`, `DATABASE_URL` not PostgreSQL, or CO
 - Simplified `env_file` to only `- .env` in `docker-compose.yml` and `docker-compose.dev.yml`.
 - Added resilient connection retry loop (15 attempts with 2s interval) in `init_db()` in `app/utils/db.py`, allowing containers to boot cleanly without `condition: service_healthy`.
 - Removed `extra_hosts` host-gateway mappings.
+
+### 2026-10-15 — Human-readable PostgreSQL error diagnostics and dynamic external DB support
+
+**Problem:** When connecting to an external PostgreSQL database (outside the Docker stack), database errors were opaque and hard to debug. In addition, `worker` had `DB_HOST=db` hardcoded under `environment:` in `docker-compose.yml`, which overrode `.env` and broke external DB setups.
+
+**Fix:**
+- Added `diagnose_db_error(exc)` in `app/utils/db.py` to parse raw PostgreSQL/psycopg2 errors and output actionable messages:
+  - Authentication failure: states user and points to `DB_USER` / `DB_PASSWORD`.
+  - Database not found: identifies the missing database and suggests `CREATE DATABASE`.
+  - Table not found: identifies the specific missing table.
+  - DNS resolution failure: explains hostname resolution failure inside Docker.
+  - Connection refused: explains server state and alerts about `localhost` inside Docker containers.
+  - Network timeout / unreachable: points to firewall/security group blocks.
+- Integrated `diagnose_db_error()` into `init_db()`, worker task processing & polling loops, and the `/health` API endpoint.
+- Initialized logging in `app/main.py` (`setup_logging()`) on boot so database connection logs and diagnostics format properly to stdout/console.
+- Made `DB_HOST=${DB_HOST:-db}` dynamic in `docker-compose.yml` so `.env` overrides are honored.
