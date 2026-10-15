@@ -22,8 +22,7 @@ services:
     env_file:
       - .env
     environment:
-      # Override DB_HOST to point at the db container (not localhost)
-      - DB_HOST=db
+      - DB_HOST=${DB_HOST:-db}
       - USER_ID=${PUID:-568}
       - GROUP_ID=${PGID:-568}
     volumes:
@@ -43,7 +42,7 @@ services:
     env_file:
       - .env
     environment:
-      - DB_HOST=db
+      - DB_HOST=${DB_HOST:-db}
       - USER_ID=${PUID:-568}
       - GROUP_ID=${PGID:-568}
     volumes:

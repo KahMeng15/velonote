@@ -109,20 +109,32 @@ def init_db(max_retries: int = 15, retry_interval: float = 2.0):
     """Initialize database with tables and apply simple migrations with retry support."""
     import time
 
-    logger.info("Initializing database...")
+    logger.info(
+        f"Connecting to PostgreSQL database '{settings.DB_NAME}' on {settings.DB_HOST}:{settings.DB_PORT} as user '{settings.DB_USER}'..."
+    )
     for attempt in range(1, max_retries + 1):
         try:
             Base.metadata.create_all(bind=engine)
-            logger.info("Database tables created/verified")
+            logger.info("Database tables created/verified successfully")
             break
         except Exception as e:
             if attempt < max_retries:
                 logger.warning(
-                    f"Database connection attempt {attempt}/{max_retries} failed: {e}. Retrying in {retry_interval}s..."
+                    f"Database connection attempt {attempt}/{max_retries} to {settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME} failed: {e}. Retrying in {retry_interval}s..."
                 )
                 time.sleep(retry_interval)
             else:
-                logger.error(f"Failed to create database tables after {max_retries} attempts: {e}", exc_info=True)
+                logger.error(
+                    f"Failed to connect to database at {settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME} after {max_retries} attempts: {e}\n"
+                    f"Troubleshooting hints for external PostgreSQL:\n"
+                    f"  1. Is DB_HOST='{settings.DB_HOST}' reachable from inside this Docker container?\n"
+                    f"     - If DB is on the host OS: DB_HOST cannot be 'localhost' or '127.0.0.1' inside a container. Use the host LAN IP or gateway IP (e.g. 172.17.0.1) or extra_hosts.\n"
+                    f"     - If DB is in another Docker container: Ensure both containers are connected to the same Docker network.\n"
+                    f"  2. Check PostgreSQL listen_addresses: ensure postgresql.conf has listen_addresses = '*'.\n"
+                    f"  3. Check pg_hba.conf: ensure PostgreSQL allows connections from Docker subnets.\n"
+                    f"  4. Verify DB_USER='{settings.DB_USER}', DB_NAME='{settings.DB_NAME}', and DB_PASSWORD.",
+                    exc_info=True,
+                )
                 raise
 
     # Apply migrations for type changes (e.g. ChatMessage ID change)
