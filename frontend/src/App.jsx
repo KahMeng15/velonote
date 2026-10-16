@@ -92,42 +92,71 @@ function GlobalAlert() {
   const [alert, setAlert] = useState(null);
 
   useEffect(() => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    let isMounted = true;
+    let pollTimer = null;
 
-    const checkMaintenance = async () => {
+    const checkHealth = async () => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+
       try {
-        const res = await fetch('/api/auth/public-settings', { signal: controller.signal });
+        const res = await fetch('/api/health', { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (!isMounted) return;
+
         if (res.ok) {
           const data = await res.json();
-          if (data.maintenance_mode) {
+          if (data?.database === 'down') {
+            setAlert({
+              type: 'database',
+              message: 'The database server is not responding.',
+              detail: 'The app cannot access the database. Retrying connection...',
+            });
+            pollTimer = setTimeout(checkHealth, 3000);
+          } else {
+            // Healthy — automatically clear any active connection banner
+            setAlert(null);
+          }
+          return;
+        }
+      } catch (e) {
+        clearTimeout(timeoutId);
+      }
+
+      if (!isMounted) return;
+
+      try {
+        const mController = new AbortController();
+        const mTimeout = setTimeout(() => mController.abort(), 3000);
+        const mRes = await fetch('/api/auth/public-settings', { signal: mController.signal });
+        clearTimeout(mTimeout);
+        if (mRes.ok) {
+          const data = await mRes.json();
+          if (data?.maintenance_mode) {
             window.location.href = '/login';
             return;
           }
         }
       } catch (e) {}
-      setAlert({ type: 'api', message: 'Cannot connect to the application server.', detail: 'Please check that the server is running and try again.' });
-    };
 
-    fetch('/api/health', { signal: controller.signal })
-      .then(res => {
-        clearTimeout(timeoutId);
-        if (!res.ok) {
-          checkMaintenance();
-          return;
-        }
-        return res.json().then(data => {
-          if (data?.database === 'down') {
-            setAlert({ type: 'database', message: 'The database server is not responding.', detail: 'The app cannot access the database. Some features will be unavailable until this is resolved.' });
-          }
-        });
-      })
-      .catch(() => {
-        clearTimeout(timeoutId);
-        checkMaintenance();
+      if (!isMounted) return;
+
+      setAlert({
+        type: 'api',
+        message: 'Cannot connect to the application server.',
+        detail: 'Connecting to server... This message will disappear once connected.',
       });
 
-    return () => clearTimeout(timeoutId);
+      // Auto-recovery: retry in 3 seconds until server is reachable
+      pollTimer = setTimeout(checkHealth, 3000);
+    };
+
+    checkHealth();
+
+    return () => {
+      isMounted = false;
+      if (pollTimer) clearTimeout(pollTimer);
+    };
   }, []);
 
   if (!alert) return null;

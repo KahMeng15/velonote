@@ -187,11 +187,11 @@ export default function Login() {
   // ── LOGIN ──────────────────────────────────────────────────────────────────
   const handleLogin = async (e) => {
     e.preventDefault();
-    const cfToken = turnstile.getToken();
-    if (!cfToken) {
+    if (turnstile.isRequired && !turnstile.getToken()) {
       setError('Please complete the human verification.');
       return;
     }
+    const cfToken = turnstile.getToken();
     setLoading(true);
     setError(null);
     setSuccess(null);
@@ -215,11 +215,11 @@ export default function Login() {
   const isVerificationError = error && error.toLowerCase().includes('not verified');
 
   const handleResendVerification = async (emailAddr) => {
-    const cfToken = turnstile.getToken();
-    if (!cfToken) {
+    if (turnstile.isRequired && !turnstile.getToken()) {
       setError('Please complete the human verification.');
       return;
     }
+    const cfToken = turnstile.getToken();
     setResending(true);
     try {
       const res = await fetch('/api/auth/resend-verification', {
@@ -251,12 +251,12 @@ export default function Login() {
       const result = await signInWithPopup(auth, provider);
       const idToken = await result.user.getIdToken();
 
-      const cfToken = turnstile.getToken();
-      if (!cfToken) {
+      if (turnstile.isRequired && !turnstile.getToken()) {
         turnstile.reset();
         setError('Please complete the human verification before signing in with Google.');
         return;
       }
+      const cfToken = turnstile.getToken();
 
       const res = await fetch('/api/auth/google-login', {
         method: 'POST',
@@ -288,11 +288,11 @@ export default function Login() {
   // ── GOOGLE COMPLETE PROFILE ────────────────────────────────────────────────
   const handleGoogleComplete = async (e) => {
     e.preventDefault();
-    const cfToken = turnstile.getToken();
-    if (!cfToken) {
+    if (turnstile.isRequired && !turnstile.getToken()) {
       setError('Please complete the human verification.');
       return;
     }
+    const cfToken = turnstile.getToken();
     if (!googleAgreeTos || !googleAgreePrivacy || !googleAgreeFairUse) {
       setError('You must agree to all policies to register.');
       return;
@@ -335,11 +335,11 @@ export default function Login() {
   // ── REGISTER ───────────────────────────────────────────────────────────────
   const handleRegister = async (e) => {
     e.preventDefault();
-    const cfToken = turnstile.getToken();
-    if (!cfToken) {
+    if (turnstile.isRequired && !turnstile.getToken()) {
       setError('Please complete the human verification.');
       return;
     }
+    const cfToken = turnstile.getToken();
     if (!agreeTos || !agreePrivacy || !agreeFairUse) {
       setError('You must agree to all policies to register.');
       return;
@@ -384,11 +384,11 @@ export default function Login() {
   // ── FORGOT PASSWORD ────────────────────────────────────────────────────────
   const handleForgotPassword = async (e) => {
     e.preventDefault();
-    const cfToken = turnstile.getToken();
-    if (!cfToken) {
+    if (turnstile.isRequired && !turnstile.getToken()) {
       setError('Please complete the human verification.');
       return;
     }
+    const cfToken = turnstile.getToken();
     setLoading(true);
     setError(null);
     setSuccess(null);
@@ -422,11 +422,11 @@ export default function Login() {
       setError('Password must be at least 8 characters.');
       return;
     }
-    const cfToken = turnstile.getToken();
-    if (!cfToken) {
+    if (turnstile.isRequired && !turnstile.getToken()) {
       setError('Please complete the human verification.');
       return;
     }
+    const cfToken = turnstile.getToken();
     setLoading(true);
     setError(null);
     setSuccess(null);
@@ -631,7 +631,7 @@ export default function Login() {
                 </Alert>
               )}
 
-              <Box mt="md" ref={turnstile.containerRef} ta="center" />
+              {turnstile.isRequired && <Box mt="md" ref={turnstile.containerRef} ta="center" />}
 
               <Group mt="lg" gap="xs" justify="center">
                 {signupConfig === 'invite' ? (
@@ -741,7 +741,7 @@ export default function Login() {
                 </Alert>
               )}
 
-              <Box mt="md" ref={turnstile.containerRef} />
+              {turnstile.isRequired && <Box mt="md" ref={turnstile.containerRef} />}
 
               <Group mt="lg" gap="xs" justify="center">
                 <Text size="sm" c="dimmed">Already have an account?</Text>
@@ -839,7 +839,7 @@ export default function Login() {
                 prefix="gc-"
               />
 
-              <Box mt="md" ref={turnstile.containerRef} />
+              {turnstile.isRequired && <Box mt="md" ref={turnstile.containerRef} />}
               <Button id="btn-gc-submit" fullWidth size="md" mt="xl" type="submit" loading={loading} style={{ backgroundColor: '#171738' }}>
                 Finish Sign Up
               </Button>
@@ -872,7 +872,7 @@ export default function Login() {
               <Button id="btn-reset" fullWidth size="md" type="submit" loading={loading} style={{ backgroundColor: '#171738' }}>
                 Send Reset Link
               </Button>
-              <Box mt="md" ref={turnstile.containerRef} />
+              {turnstile.isRequired && <Box mt="md" ref={turnstile.containerRef} />}
               <Group mt="lg" gap="xs" justify="center">
                 <Anchor component="button" type="button" size="sm" onClick={() => switchPanel('login')}>
                   Back to Login
@@ -910,7 +910,7 @@ export default function Login() {
               <Button id="btn-reset-password" fullWidth size="md" type="submit" loading={loading} mt="xl" style={{ backgroundColor: '#171738' }}>
                 Reset Password
               </Button>
-              <Box mt="md" ref={turnstile.containerRef} />
+              {turnstile.isRequired && <Box mt="md" ref={turnstile.containerRef} />}
               <Group mt="lg" gap="xs" justify="center">
                 <Anchor component="button" type="button" size="sm" onClick={() => { setSearchParams({}, { replace: true }); switchPanel('login'); }}>
                   Back to Login

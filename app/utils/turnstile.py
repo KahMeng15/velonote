@@ -49,6 +49,9 @@ async def validate_turnstile(token: str, ip: str | None = None) -> bool:
             if not success:
                 error_codes = result.get("error-codes", [])
                 logger.warning("Turnstile validation failed: error_codes=%s ip=%s", error_codes, ip)
+                if "invalid-input-secret" in error_codes:
+                    logger.error("TURNSTILE_SECRET_KEY is invalid ('invalid-input-secret'); skipping verification.")
+                    return True
             return success
     except httpx.ConnectError:
         logger.error("Turnstile verification failed: cannot reach Cloudflare (network error)")
@@ -91,6 +94,9 @@ async def turnstile_middleware(request: Request, call_next):
 
     token = data.get("cf_turnstile_response")
     if not token:
+        if settings.ENVIRONMENT.lower() != "production":
+            logger.warning("Missing Turnstile verification token in non-production environment; skipping verification.")
+            return await call_next(request)
         return JSONResponse(
             status_code=400,
             content={"detail": "Missing Turnstile verification token"},
