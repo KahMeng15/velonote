@@ -43,16 +43,32 @@ class SmartPipeline:
         use_vision: bool = False,
         inter_call_delay_s: float = 0.0,
     ):
-        has_ai = (
-            bool(gemini_api_key)
-            or bool(settings.GLOBAL_AI_TIER1_API_KEY)
-            or bool(settings.GLOBAL_AI_TIER2_API_KEY)
-            or settings.GLOBAL_AI_TIER1_PROVIDER == "ollama"
-            or settings.GLOBAL_AI_TIER2_PROVIDER == "ollama"
-        )
-        self.use_polish = use_polish and has_ai
+        has_ai = False
+        if bool(gemini_api_key):
+            has_ai = True
+        else:
+            try:
+                from app.processing.ai_client import AIClient
+                client = AIClient(category="processing")
+                has_ai = len(client.tiers) > 0
+            except Exception:
+                has_ai = (
+                    bool(getattr(settings, "GLOBAL_AI_TIER1_API_KEY", None))
+                    or bool(getattr(settings, "GLOBAL_AI_TIER2_API_KEY", None))
+                    or getattr(settings, "GLOBAL_AI_TIER1_PROVIDER", "") == "ollama"
+                    or getattr(settings, "GLOBAL_AI_TIER2_PROVIDER", "") == "ollama"
+                    or bool(getattr(settings, "AI_PROCESSING_TIER1_API_KEY", None))
+                    or getattr(settings, "AI_PROCESSING_TIER1_PROVIDER", "") == "ollama"
+                    or bool(getattr(settings, "AI_PROCESSING_TIER2_API_KEY", None))
+                    or getattr(settings, "AI_PROCESSING_TIER2_PROVIDER", "") == "ollama"
+                )
+        self.use_polish = bool(use_polish and has_ai)
         self.gemini_api_key = gemini_api_key
-        self.gemini_model = gemini_model or settings.GLOBAL_AI_TIER1_MODEL
+        self.gemini_model = (
+            gemini_model
+            or getattr(settings, "AI_PROCESSING_TIER1_MODEL", None)
+            or settings.GLOBAL_AI_TIER1_MODEL
+        )
         self.font_extractor = FontAwareExtractor()
         self.layout_detector = None  # Legacy: disabled
         self.table_detector = None  # Legacy: disabled

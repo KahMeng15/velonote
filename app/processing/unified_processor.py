@@ -179,6 +179,11 @@ class UnifiedContentProcessor:
 
         markdown = self.image_mapper.insert_images(ocr_text, images, source_format="image")
 
+        if self.use_polish and self.smart_pipeline.use_polish and markdown and not markdown.startswith("Error:"):
+            if progress_callback:
+                progress_callback(95, "Polishing OCR text with AI...")
+            markdown = self.smart_pipeline._ai_polish(markdown, progress_callback=progress_callback)
+
         return ContentBundle(
             markdown=markdown,
             images=images,
@@ -208,6 +213,13 @@ class UnifiedContentProcessor:
             progress_callback(90, "Mapping images to text...")
 
         markdown = self.image_mapper.insert_images(ocr_text, images, source_format="pdf")
+
+        if self.use_polish and self.smart_pipeline.use_polish and markdown and not markdown.startswith("Error:"):
+            if progress_callback:
+                progress_callback(95, "Polishing OCR text with AI...")
+            t_ai = time.time()
+            markdown = self.smart_pipeline._ai_polish(markdown, progress_callback=progress_callback)
+            timings["ai_polish"] = time.time() - t_ai
 
         return ContentBundle(
             markdown=markdown,
