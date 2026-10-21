@@ -28,7 +28,7 @@
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-markdown": "^10.1.0",
-    "react-router-dom": "^7.17.0",
+    "react-router-dom": "^7.18.4",
     "react-syntax-highlighter": "^16.1.1",
     "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.1",
@@ -44,9 +44,9 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
-    "postcss": "^8.5.15",
+    "postcss": "^8.5.31",
     "postcss-preset-mantine": "^1.18.0",
     "postcss-simple-vars": "^7.0.1",
-    "vite": "^8.0.12"
+    "vite": "^8.3.5"
   }
 }
